@@ -1,0 +1,14 @@
+{
+  "name": "songlist-realtime-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dockerized realtime songlist app with leader and user views",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.1"
+  }
+}
