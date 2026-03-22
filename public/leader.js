@@ -110,8 +110,23 @@ songSelect.addEventListener("change", () => {
   socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
 });
 
+function changeSongSelection(step) {
+  const currentIndex = songSelect.selectedIndex;
+  if (currentIndex < 0) {
+    return;
+  }
+
+  const nextIndex = Math.max(0, Math.min(songSelect.options.length - 1, currentIndex + step));
+  if (nextIndex === currentIndex) {
+    return;
+  }
+
+  songSelect.selectedIndex = nextIndex;
+  socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
+}
+
 window.addEventListener("keydown", (event) => {
-  if ((event.code !== "Space" && event.key !== " ") || event.repeat) {
+  if (event.repeat) {
     return;
   }
 
@@ -124,8 +139,28 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  event.preventDefault();
-  socket.send(JSON.stringify({ type: "next-section" }));
+  if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
+    event.preventDefault();
+    socket.send(JSON.stringify({ type: "next-section" }));
+    return;
+  }
+
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    socket.send(JSON.stringify({ type: "previous-section" }));
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    changeSongSelection(1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    changeSongSelection(-1);
+  }
 });
 
 window.addEventListener("scroll", () => {

@@ -136,6 +136,13 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "previous-section") {
+      state.currentSectionIndex = Math.max(0, state.currentSectionIndex - 1);
+      state.scrollRatio = 0;
+      broadcastState();
+      return;
+    }
+
     if (message.type === "scroll" && typeof message.scrollRatio === "number") {
       const scrollRatio = Math.max(0, Math.min(1, message.scrollRatio));
       state.scrollRatio = scrollRatio;
