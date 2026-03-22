@@ -2,8 +2,8 @@
 
 This is a Dockerized MVP for a shared songbook application with two views:
 
-- `Leader`: sees songs with chords and controls the active song.
-- `User`: sees the same active song without chords.
+- `Leader`: sees songs with inline chords and controls the active song.
+- `User`: sees the same active song without chords by default, with an option to show them.
 
 The app uses a simple in-memory realtime session over WebSockets. That keeps the first version easy to run inside a single container.
 
@@ -34,7 +34,7 @@ npm start
 
 ## Notes
 
-- Song data is loaded from `documents/SongBook-extracted.md`.
+- Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.
 - Realtime state is not persisted yet. Restarting the container resets the current song and connected counts.
 - This version assumes route-based roles rather than authenticated users.
 - The Docker image now installs dependencies with `npm ci`, runs as the non-root `node` user, and can also be started with `docker compose`.

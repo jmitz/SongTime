@@ -1,4 +1,5 @@
 const songTitle = document.getElementById("song-title");
+const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const connectionStatus = document.getElementById("connection-status");
 const showChordsToggle = document.getElementById("show-chords");
@@ -6,6 +7,7 @@ const showChordsToggle = document.getElementById("show-chords");
 let socket;
 let allowScroll = true;
 let currentSong = null;
+let currentSection = null;
 
 const STORAGE_KEY = "songlist-show-chords";
 
@@ -13,10 +15,63 @@ function getShowChords() {
   return showChordsToggle.checked;
 }
 
-function renderSong(song) {
+function resolveSection(song, section, sectionIndex = 0) {
+  if (section) {
+    return section;
+  }
+
+  if (song?.sections && song.sectionOrder?.length) {
+    const sectionId = song.sectionOrder[sectionIndex] || song.sectionOrder[0];
+    if (sectionId && song.sections[sectionId]) {
+      return {
+        id: sectionId,
+        ...song.sections[sectionId],
+      };
+    }
+  }
+
+  if (song?.content) {
+    return {
+      id: "1",
+      type: "verse",
+      content: song.content,
+    };
+  }
+
+  return null;
+}
+
+function formatSectionLabel(section) {
+  if (!section) {
+    return "";
+  }
+
+  if (section.id === "C") {
+    return "Chorus";
+  }
+
+  if (section.id === "B") {
+    return "Bridge";
+  }
+
+  return `Verse ${section.id}`;
+}
+
+function toLyricsOnly(content) {
+  return content
+    .replace(/\[[^[\]]+\]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function renderSong(song, section) {
   currentSong = song;
+  currentSection = section;
   songTitle.textContent = song.title;
-  songContent.textContent = getShowChords() ? song.chorded : song.lyrics;
+  sectionLabel.textContent = formatSectionLabel(section);
+  songContent.textContent = getShowChords() ? section?.content || "" : toLyricsOnly(section?.content || "");
   songContent.classList.toggle("with-chords", getShowChords());
 }
 
@@ -36,8 +91,8 @@ function setStatus(text) {
 showChordsToggle.checked = window.localStorage.getItem(STORAGE_KEY) === "true";
 showChordsToggle.addEventListener("change", () => {
   window.localStorage.setItem(STORAGE_KEY, String(showChordsToggle.checked));
-  if (currentSong) {
-    renderSong(currentSong);
+  if (currentSong && currentSection) {
+    renderSong(currentSong, currentSection);
   }
 });
 
@@ -53,7 +108,10 @@ function connect() {
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     if (message.type === "state") {
-      renderSong(message.payload.currentSong);
+      renderSong(
+        message.payload.currentSong,
+        resolveSection(message.payload.currentSong, message.payload.currentSection, message.payload.currentSectionIndex),
+      );
       applyScroll(message.payload.scrollRatio);
     }
 

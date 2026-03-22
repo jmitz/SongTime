@@ -1,5 +1,6 @@
 const songSelect = document.getElementById("song-select");
 const songTitle = document.getElementById("song-title");
+const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
@@ -7,9 +8,52 @@ const userCount = document.getElementById("user-count");
 let socket;
 let suppressScrollBroadcast = false;
 
-function renderSong(song) {
+function resolveSection(song, section, sectionIndex = 0) {
+  if (section) {
+    return section;
+  }
+
+  if (song?.sections && song.sectionOrder?.length) {
+    const sectionId = song.sectionOrder[sectionIndex] || song.sectionOrder[0];
+    if (sectionId && song.sections[sectionId]) {
+      return {
+        id: sectionId,
+        ...song.sections[sectionId],
+      };
+    }
+  }
+
+  if (song?.content) {
+    return {
+      id: "1",
+      type: "verse",
+      content: song.content,
+    };
+  }
+
+  return null;
+}
+
+function formatSectionLabel(section) {
+  if (!section) {
+    return "";
+  }
+
+  if (section.id === "C") {
+    return "Chorus";
+  }
+
+  if (section.id === "B") {
+    return "Bridge";
+  }
+
+  return `Verse ${section.id}`;
+}
+
+function renderSong(song, section) {
   songTitle.textContent = song.title;
-  songContent.textContent = song.chorded;
+  sectionLabel.textContent = formatSectionLabel(section);
+  songContent.textContent = section?.content || "";
 }
 
 function applyState(state) {
@@ -20,7 +64,7 @@ function applyState(state) {
     return;
   }
 
-  renderSong(state.currentSong);
+  renderSong(state.currentSong, resolveSection(state.currentSong, state.currentSection, state.currentSectionIndex));
   songSelect.value = state.currentSongId;
   applyScroll(state.scrollRatio);
 }
@@ -64,6 +108,24 @@ songSelect.addEventListener("change", () => {
   }
 
   socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
+});
+
+window.addEventListener("keydown", (event) => {
+  if ((event.code !== "Space" && event.key !== " ") || event.repeat) {
+    return;
+  }
+
+  const target = event.target;
+  if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+    return;
+  }
+
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  event.preventDefault();
+  socket.send(JSON.stringify({ type: "next-section" }));
 });
 
 window.addEventListener("scroll", () => {
