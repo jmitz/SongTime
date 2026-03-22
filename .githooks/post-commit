@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "Rebuilding SongList container after commit..."
+docker compose up --build -d

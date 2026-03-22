@@ -32,6 +32,26 @@ npm install
 npm start
 ```
 
+## Continuous Integration
+
+- `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests.
+- It installs dependencies, checks `server.js`, verifies the DB seed output, builds the Docker image, starts the container, and confirms `/health` responds successfully.
+
+## Local Auto-Redeploy On Commit
+
+- If you want every local `git commit` to rebuild and restart the container on this machine, enable the versioned hook path once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- After that, `.githooks/post-commit` will run `docker compose up --build -d` after each commit.
+- You can also run the same behavior manually with:
+
+```bash
+./scripts/redeploy.sh
+```
+
 ## Notes
 
 - Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.

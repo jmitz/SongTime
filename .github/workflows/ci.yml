@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check server syntax
+        run: node --check server.js
+
+      - name: Check database seed generation
+        run: node db/seed-data.js > /tmp/song-seed.json
+
+      - name: Build Docker image
+        run: docker build -t songlist-app-ci .
+
+      - name: Start Docker container
+        run: docker run -d -p 3000:3000 --name songlist-app-ci songlist-app-ci
+
+      - name: Wait for health endpoint
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:3000/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container did not become healthy in time" >&2
+          docker logs songlist-app-ci || true
+          exit 1
+
+      - name: Stop Docker container
+        if: always()
+        run: docker rm -f songlist-app-ci || true
