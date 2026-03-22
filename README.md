@@ -23,6 +23,7 @@ docker compose up --build
 Then open:
 
 - `http://localhost:3000/leader.html`
+- `http://localhost:3000/editor.html`
 - `http://localhost:3000/user.html`
 
 ## Local Run Without Docker
@@ -56,6 +57,7 @@ git config core.hooksPath .githooks
 
 - Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.
 - Songs initialize into a local SQLite database at `data/songlist.db`.
+- `editor.html` lets you create songs and edit titles, CCLI numbers, section order, and section content directly in that SQLite database.
 - The live session stays in server memory for this single-instance app, so connected counts and the current position reset on restart.
 - This version assumes route-based roles rather than authenticated users.
 - The Docker image now installs dependencies with `npm ci`, runs as the non-root `node` user, and can also be started with `docker compose`.

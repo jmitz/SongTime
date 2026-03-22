@@ -57,6 +57,77 @@ app.get("/api/songs", (_req, res) => {
   });
 });
 
+app.get("/api/songs/:id", (req, res) => {
+  const song = repository.getSong(req.params.id);
+  if (!song) {
+    res.status(404).json({ error: "Song not found." });
+    return;
+  }
+
+  res.json({ song });
+});
+
+function handleSongMutation(req, res, saveSong) {
+  try {
+    const song = saveSong(req.body);
+    if (!song) {
+      res.status(404).json({ error: "Song not found." });
+      return;
+    }
+
+    if (song.id === state.currentSongId) {
+      const maxIndex = Math.max(0, song.sectionOrder.length - 1);
+      state.currentSectionIndex = Math.min(maxIndex, state.currentSectionIndex);
+      broadcastState();
+    }
+
+    broadcastSongs();
+
+    res.json({
+      song,
+      songs: repository.listSongSummaries(),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+app.post("/api/songs", (req, res) => {
+  handleSongMutation(req, res, (payload) => repository.createSong(payload));
+});
+
+app.put("/api/songs/:id", (req, res) => {
+  handleSongMutation(req, res, (payload) => repository.updateSong(req.params.id, payload));
+});
+
+app.delete("/api/songs/:id", (req, res) => {
+  try {
+    const deletedSong = repository.deleteSong(req.params.id);
+    if (!deletedSong) {
+      res.status(404).json({ error: "Song not found." });
+      return;
+    }
+
+    if (deletedSong.id === state.currentSongId) {
+      const fallbackSong = repository.songs[0];
+      state.currentSongId = fallbackSong.id;
+      state.currentSectionIndex = 0;
+      state.scrollRatio = 0;
+      broadcastState();
+    }
+
+    broadcastSongs();
+
+    res.json({
+      deletedSongId: deletedSong.id,
+      songs: repository.listSongSummaries(),
+      currentSongId: state.currentSongId,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get("/api/state", (_req, res) => {
   res.json(serializeState());
 });
@@ -79,6 +150,15 @@ function broadcast(payload) {
 
 function broadcastState() {
   broadcast({ type: "state", payload: serializeState() });
+}
+
+function broadcastSongs() {
+  broadcast({
+    type: "songs",
+    payload: {
+      songs: repository.listSongSummaries(),
+    },
+  });
 }
 
 wss.on("connection", (socket) => {

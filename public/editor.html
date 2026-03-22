@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SongList Editor</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell editor-shell">
+      <aside class="sidebar editor-sidebar">
+        <div>
+          <p class="eyebrow">Song Editor</p>
+          <h1>Manage songs</h1>
+          <p class="muted">Create a new song or update an existing one in SQLite.</p>
+        </div>
+        <button id="new-song-button" class="button button-secondary" type="button">Add new song</button>
+        <label class="field">
+          <span>Song library</span>
+          <input id="song-search" type="search" placeholder="Filter by title" />
+        </label>
+        <div id="song-list" class="song-list" aria-live="polite"></div>
+        <a class="text-link" href="/leader.html">Open the leader view</a>
+      </aside>
+      <main class="song-stage editor-stage">
+        <header class="song-header editor-header">
+          <div>
+            <p class="eyebrow">Edit Song</p>
+            <h2 id="editor-title">New song</h2>
+            <p class="section-label">Save changes to update the shared song library.</p>
+          </div>
+          <div id="save-status" class="pill">Loading songs...</div>
+        </header>
+
+        <form id="song-form" class="editor-form">
+          <label class="field">
+            <span>Title</span>
+            <input id="song-title-input" name="title" type="text" required />
+          </label>
+
+          <label class="field">
+            <span>CCLI Number</span>
+            <input id="song-ccli-input" name="ccli" type="text" />
+          </label>
+
+          <label class="field">
+            <span>Section Order</span>
+            <input
+              id="section-order-input"
+              name="sectionOrder"
+              type="text"
+              placeholder="1, 1, C, 2, C, B, C"
+              required
+            />
+          </label>
+
+          <section class="editor-sections">
+            <div class="editor-sections-header">
+              <div>
+                <h3>Sections</h3>
+                <p class="muted">Add each unique section here, then reference those IDs in section order.</p>
+              </div>
+              <button id="add-section-button" class="button button-secondary" type="button">Add section</button>
+            </div>
+            <div id="sections-container" class="sections-container"></div>
+          </section>
+
+          <div class="editor-actions">
+            <button class="button" type="submit">Save song</button>
+            <button id="delete-song-button" class="button button-danger" type="button">Delete song</button>
+          </div>
+        </form>
+      </main>
+    </div>
+    <script src="/editor.js" defer></script>
+  </body>
+</html>

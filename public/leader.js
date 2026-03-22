@@ -7,6 +7,7 @@ const userCount = document.getElementById("user-count");
 
 let socket;
 let suppressScrollBroadcast = false;
+let selectedSongId = null;
 
 function resolveSection(song, section, sectionIndex = 0) {
   if (section) {
@@ -51,9 +52,26 @@ function formatSectionLabel(section) {
 }
 
 function renderSong(song, section) {
+  selectedSongId = song.id;
   songTitle.textContent = song.title;
   sectionLabel.textContent = formatSectionLabel(section);
   songContent.textContent = section?.content || "";
+}
+
+function renderSongOptions(songs) {
+  const previousSelection = selectedSongId ?? songSelect.value;
+  songSelect.innerHTML = "";
+
+  for (const song of songs) {
+    const option = document.createElement("option");
+    option.value = song.id;
+    option.textContent = song.title;
+    songSelect.append(option);
+  }
+
+  if (previousSelection) {
+    songSelect.value = String(previousSelection);
+  }
 }
 
 function applyState(state) {
@@ -94,6 +112,10 @@ function connect() {
 
     if (message.type === "scroll") {
       applyScroll(message.payload.scrollRatio);
+    }
+
+    if (message.type === "songs") {
+      renderSongOptions(message.payload.songs);
     }
   });
 
@@ -176,13 +198,7 @@ window.addEventListener("scroll", () => {
 async function init() {
   const response = await fetch("/api/songs");
   const data = await response.json();
-
-  for (const song of data.songs) {
-    const option = document.createElement("option");
-    option.value = song.id;
-    option.textContent = song.title;
-    songSelect.append(option);
-  }
+  renderSongOptions(data.songs);
 
   connect();
 }

@@ -1,0 +1,284 @@
+const songList = document.getElementById("song-list");
+const songSearch = document.getElementById("song-search");
+const newSongButton = document.getElementById("new-song-button");
+const addSectionButton = document.getElementById("add-section-button");
+const saveStatus = document.getElementById("save-status");
+const editorTitle = document.getElementById("editor-title");
+const songForm = document.getElementById("song-form");
+const songTitleInput = document.getElementById("song-title-input");
+const songCcliInput = document.getElementById("song-ccli-input");
+const sectionOrderInput = document.getElementById("section-order-input");
+const sectionsContainer = document.getElementById("sections-container");
+const deleteSongButton = document.getElementById("delete-song-button");
+
+let songs = [];
+let activeSongId = null;
+
+function setStatus(message, isError = false) {
+  saveStatus.textContent = message;
+  saveStatus.classList.toggle("pill-error", isError);
+}
+
+function createSectionRow(sectionId = "", content = "") {
+  const row = document.createElement("article");
+  row.className = "section-card";
+
+  const header = document.createElement("div");
+  header.className = "section-card-header";
+
+  const idLabel = document.createElement("label");
+  idLabel.className = "field";
+  const idText = document.createElement("span");
+  idText.textContent = "Section ID";
+  const idInput = document.createElement("input");
+  idInput.type = "text";
+  idInput.value = sectionId;
+  idInput.dataset.field = "section-id";
+  idInput.placeholder = "1 or C";
+  idLabel.append(idText, idInput);
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "button button-ghost";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+  });
+
+  header.append(idLabel, removeButton);
+
+  const contentLabel = document.createElement("label");
+  contentLabel.className = "field";
+  const contentText = document.createElement("span");
+  contentText.textContent = "Content";
+  const contentInput = document.createElement("textarea");
+  contentInput.rows = 9;
+  contentInput.dataset.field = "section-content";
+  contentInput.placeholder = "[C] Amazing grace...\nWhen we've been there...";
+  contentInput.value = content;
+  contentLabel.append(contentText, contentInput);
+
+  row.append(header, contentLabel);
+  return row;
+}
+
+function getSectionRows() {
+  return Array.from(sectionsContainer.querySelectorAll(".section-card"));
+}
+
+function populateSections(sections) {
+  sectionsContainer.innerHTML = "";
+  const entries = Object.entries(sections);
+  if (entries.length === 0) {
+    sectionsContainer.append(createSectionRow("1", ""));
+    return;
+  }
+
+  for (const [sectionId, section] of entries) {
+    sectionsContainer.append(createSectionRow(sectionId, section.content || ""));
+  }
+}
+
+function setFormSong(song) {
+  activeSongId = song?.id ?? null;
+  editorTitle.textContent = song?.title || "New song";
+  songTitleInput.value = song?.title || "";
+  songCcliInput.value = song?.ccliNum || "";
+  sectionOrderInput.value = song?.sectionOrder?.join(", ") || "1";
+  populateSections(song?.sections || { 1: { content: "" } });
+  deleteSongButton.disabled = activeSongId == null;
+  renderSongList();
+}
+
+function getFormPayload() {
+  const sections = {};
+
+  for (const row of getSectionRows()) {
+    const sectionId = row.querySelector('[data-field="section-id"]').value.trim();
+    const content = row.querySelector('[data-field="section-content"]').value.trim();
+
+    if (!sectionId && !content) {
+      continue;
+    }
+
+    if (!sectionId || !content) {
+      throw new Error("Each section needs both an ID and content.");
+    }
+
+    if (sections[sectionId]) {
+      throw new Error(`Section "${sectionId}" appears more than once.`);
+    }
+
+    sections[sectionId] = { content };
+  }
+
+  return {
+    title: songTitleInput.value.trim(),
+    ccliNum: songCcliInput.value.trim(),
+    sectionOrder: sectionOrderInput.value
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    sections,
+  };
+}
+
+function renderSongList() {
+  const query = songSearch.value.trim().toLowerCase();
+  songList.innerHTML = "";
+
+  const filteredSongs = songs.filter((song) => song.title.toLowerCase().includes(query));
+  if (filteredSongs.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "muted";
+    emptyState.textContent = "No songs match this filter.";
+    songList.append(emptyState);
+    return;
+  }
+
+  for (const song of filteredSongs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "song-list-item";
+    button.textContent = song.title;
+    button.classList.toggle("active", song.id === activeSongId);
+    button.addEventListener("click", () => {
+      loadSong(song.id).catch((error) => {
+        setStatus(error.message, true);
+      });
+    });
+    songList.append(button);
+  }
+}
+
+async function loadSongLibrary(selectedSongId = activeSongId) {
+  const response = await fetch("/api/songs");
+  if (!response.ok) {
+    throw new Error("Unable to load songs.");
+  }
+
+  const data = await response.json();
+  songs = data.songs;
+  renderSongList();
+
+  if (selectedSongId == null || songs.length === 0) {
+    return;
+  }
+
+  const exists = songs.some((song) => song.id === selectedSongId);
+  if (!exists) {
+    return;
+  }
+
+  await loadSong(selectedSongId);
+}
+
+async function loadSong(songId) {
+  setStatus("Loading song...");
+  const response = await fetch(`/api/songs/${songId}`);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Unable to load song.");
+  }
+
+  setFormSong(data.song);
+  setStatus("Ready");
+}
+
+songSearch.addEventListener("input", () => {
+  renderSongList();
+});
+
+newSongButton.addEventListener("click", () => {
+  setFormSong(null);
+  setStatus("Ready for a new song");
+});
+
+addSectionButton.addEventListener("click", () => {
+  sectionsContainer.append(createSectionRow("", ""));
+});
+
+deleteSongButton.addEventListener("click", async () => {
+  if (activeSongId == null) {
+    return;
+  }
+
+  const song = songs.find((entry) => entry.id === activeSongId);
+  if (!song) {
+    setStatus("Song not found in the current list.", true);
+    return;
+  }
+
+  if (!window.confirm(`Delete "${song.title}"? This cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    setStatus("Deleting...");
+    const response = await fetch(`/api/songs/${activeSongId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to delete song.");
+    }
+
+    songs = data.songs;
+    const nextSong = songs.find((entry) => entry.id === data.currentSongId) || songs[0] || null;
+    setFormSong(null);
+
+    if (nextSong) {
+      await loadSong(nextSong.id);
+    } else {
+      setStatus("Song deleted");
+    }
+
+    setStatus("Song deleted");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
+songForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  try {
+    const payload = getFormPayload();
+    setStatus("Saving...");
+
+    const isEditing = activeSongId != null;
+    const response = await fetch(isEditing ? `/api/songs/${activeSongId}` : "/api/songs", {
+      method: isEditing ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to save song.");
+    }
+
+    songs = data.songs;
+    setFormSong(data.song);
+    setStatus(isEditing ? "Song updated" : "Song created");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
+async function init() {
+  await loadSongLibrary();
+
+  if (songs.length > 0) {
+    await loadSong(songs[0].id);
+  } else {
+    setFormSong(null);
+    setStatus("Ready");
+  }
+}
+
+init().catch((error) => {
+  setStatus(error.message, true);
+});
