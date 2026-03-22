@@ -353,6 +353,11 @@ textarea {
   gap: 16px;
 }
 
+.editor-sections-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .editor-sections h3 {
   margin: 0 0 8px;
 }

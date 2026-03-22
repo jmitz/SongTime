@@ -11,7 +11,17 @@ The app uses a simple in-memory realtime session over WebSockets. That keeps the
 
 ```bash
 docker build -t songlist-app .
-docker run --rm -p 3000:3000 songlist-app
+mkdir -p data
+docker run --rm -p 3000:3000 \
+  -v "$(pwd)/package.json:/app/package.json:ro" \
+  -v "$(pwd)/package-lock.json:/app/package-lock.json:ro" \
+  -v "$(pwd)/server.js:/app/server.js" \
+  -v "$(pwd)/db:/app/db" \
+  -v "$(pwd)/lib:/app/lib" \
+  -v "$(pwd)/public:/app/public" \
+  -v "$(pwd)/documents:/app/documents:ro" \
+  -v "$(pwd)/data:/app/data" \
+  songlist-app
 ```
 
 Or with Docker Compose:
@@ -19,6 +29,9 @@ Or with Docker Compose:
 ```bash
 docker compose up --build
 ```
+
+Both Docker Compose and the `docker run` example above mount the local `data/` folder into the container, so SQLite changes persist in [data/songlist.db](/home/jdmit/src/personal/SongList/data/songlist.db) on your machine.
+They also bind-mount the app files the container serves and executes, so local changes to `server.js`, `public/`, `db/`, `lib/`, and the packaged song documents are what the container uses at runtime.
 
 Then open:
 
@@ -58,6 +71,8 @@ git config core.hooksPath .githooks
 - Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.
 - Songs initialize into a local SQLite database at `data/songlist.db`.
 - `editor.html` lets you create songs and edit titles, CCLI numbers, section order, and section content directly in that SQLite database.
+- Docker runs can use the same local `data/songlist.db` by mounting `./data` to `/app/data`.
+- Docker Compose also bind-mounts the local web/server source files into `/app`, so the container uses your local copies of the app code and static assets.
 - The live session stays in server memory for this single-instance app, so connected counts and the current position reset on restart.
 - This version assumes route-based roles rather than authenticated users.
 - The Docker image now installs dependencies with `npm ci`, runs as the non-root `node` user, and can also be started with `docker compose`.

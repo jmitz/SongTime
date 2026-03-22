@@ -4,6 +4,15 @@ services:
       context: .
     ports:
       - "3000:3000"
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./server.js:/app/server.js
+      - ./db:/app/db
+      - ./lib:/app/lib
+      - ./public:/app/public
+      - ./documents:/app/documents:ro
+      - ./data:/app/data
     environment:
       PORT: 3000
     restart: unless-stopped

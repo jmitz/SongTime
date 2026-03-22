@@ -1,7 +1,7 @@
 const songList = document.getElementById("song-list");
 const songSearch = document.getElementById("song-search");
 const newSongButton = document.getElementById("new-song-button");
-const addSectionButton = document.getElementById("add-section-button");
+const addSectionButtons = document.querySelectorAll(".add-section-button");
 const saveStatus = document.getElementById("save-status");
 const editorTitle = document.getElementById("editor-title");
 const songForm = document.getElementById("song-form");
@@ -194,9 +194,11 @@ newSongButton.addEventListener("click", () => {
   setStatus("Ready for a new song");
 });
 
-addSectionButton.addEventListener("click", () => {
-  sectionsContainer.append(createSectionRow("", ""));
-});
+for (const addSectionButton of addSectionButtons) {
+  addSectionButton.addEventListener("click", () => {
+    sectionsContainer.append(createSectionRow("", ""));
+  });
+}
 
 deleteSongButton.addEventListener("click", async () => {
   if (activeSongId == null) {
