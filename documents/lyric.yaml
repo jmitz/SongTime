@@ -1,0 +1,25 @@
+id: 1
+title: "As The Deer"
+ccli_num: 1431
+lyrics_json: 
+  1:|
+    [C]As the d[G]eer panteth [Am]for the w[Em]ater,
+    [F]So my soul lo[G]ngeth [C]aft[G]er you.
+    [C]You a[G]lone are my h[Am]eart's d[Em]esire
+    [F]And I lon[G]g to wo[C]rship you.
+  2:|
+    [C]You a[G]lone are my st[Am]rength, my sh[Em]ield;
+    To [F]You alone may my sp[G]irit y[C]ield.
+    [C]You a[G]lone are my h[Am]eart's d[Em]esire,
+    And I lon[G]g to wo[C]rship you.
+  3:|
+    [C]You're my fr[G]iend and You are my br[Am]other,
+    Even [F]though You are a K[G]ing.
+    I [C]love You more than any [G]other,
+    So [F]much more than anyth[G]ing.
+  C:|
+    [Am]You alone are my str[F]ength, my sh[C]ield.
+    [F]To You alone will my sp[Am]irit yi[Dm]eld.[E]
+    [C]You a[G]lone are my h[Am]eart's d[Em]esire
+    [F]And I lon[G]g to wo[C]rship you.
+section_order_json: ["1", "C", "2", "C", "3", "C"]

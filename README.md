@@ -35,6 +35,14 @@ npm start
 ## Notes
 
 - Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.
-- Realtime state is not persisted yet. Restarting the container resets the current song and connected counts.
+- Songs initialize into a local SQLite database at `data/songlist.db`.
+- The live session stays in server memory for this single-instance app, so connected counts and the current position reset on restart.
 - This version assumes route-based roles rather than authenticated users.
 - The Docker image now installs dependencies with `npm ci`, runs as the non-root `node` user, and can also be started with `docker compose`.
+
+## Database Foundation
+
+- `db/schema.sql` now defines a single `songs` table with an integer `id`, a text `ccli_num`, and section metadata stored as JSON in the row.
+- `db/seed-data.js` transforms the current markdown songbook into song rows for that table.
+- `db/sqlite.js` creates the SQLite database, applies the schema, and seeds songs into it when the database is empty.
+- `lib/songbook.js` now holds the parsing and normalization logic so the app and future database seed/import steps share the same source of truth.

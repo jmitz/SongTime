@@ -5,9 +5,11 @@
   "description": "Dockerized realtime songlist app with leader and user views",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "db:seed-preview": "node db/seed-data.js"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "express": "^4.21.2",
     "ws": "^8.18.1"
   }

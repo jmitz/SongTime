@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS songs (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  ccli_num TEXT,
+  lyrics_json TEXT NOT NULL,
+  section_order_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
