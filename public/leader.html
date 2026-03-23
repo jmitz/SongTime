@@ -22,6 +22,18 @@
           <div><span>Leaders</span><strong id="leader-count">0</strong></div>
           <div><span>Users</span><strong id="user-count">0</strong></div>
         </div>
+        <label class="toggle">
+          <input id="edit-mode-toggle" type="checkbox" />
+          <span>Edit chords</span>
+        </label>
+        <div id="edit-status" class="pill">Edit mode off</div>
+        <div id="leader-edit-actions" class="leader-edit-actions" hidden>
+          <p class="muted">Drag chords directly in the song display, then save the new positions.</p>
+          <div class="editor-actions">
+            <button id="save-chords-button" class="button" type="button">Save chord changes</button>
+            <button id="reset-chords-button" class="button button-secondary" type="button">Reset draft</button>
+          </div>
+        </div>
         <a class="text-link" href="/editor.html">Open the song editor</a>
         <a class="text-link" href="/user.html">Open the user view</a>
       </aside>
