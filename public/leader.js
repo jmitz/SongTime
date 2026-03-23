@@ -67,7 +67,8 @@ function renderSong(song, section) {
   selectedSongId = song.id;
   songTitle.textContent = song.title;
   sectionLabel.textContent = formatSectionLabel(section);
-  songContent.textContent = section?.content || "";
+  songContent.innerHTML = window.SongRender.renderChordedSongHtml(section?.content || "");
+  songContent.classList.add("with-inline-chords");
 }
 
 function renderSongOptions(songs) {

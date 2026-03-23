@@ -83,8 +83,14 @@ function renderSong(song, section) {
   currentSection = section;
   songTitle.textContent = song.title;
   sectionLabel.textContent = formatSectionLabel(section);
-  songContent.textContent = getShowChords() ? section?.content || "" : toLyricsOnly(section?.content || "");
+  if (getShowChords()) {
+    songContent.innerHTML = window.SongRender.renderChordedSongHtml(section?.content || "");
+  } else {
+    songContent.textContent = toLyricsOnly(section?.content || "");
+  }
+
   songContent.classList.toggle("with-chords", getShowChords());
+  songContent.classList.toggle("with-inline-chords", getShowChords());
 }
 
 function applyScroll(scrollRatio) {
