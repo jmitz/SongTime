@@ -6,11 +6,28 @@ const { loadSeedData } = require("./seed-data");
 const DEFAULT_DB_PATH = path.join(__dirname, "..", "data", "songlist.db");
 const SCHEMA_PATH = path.join(__dirname, "schema.sql");
 
+function hydrateSectionTypes(db) {
+  return db
+    .prepare(
+      `SELECT code, desc
+       FROM section_types
+       ORDER BY code ASC`,
+    )
+    .all()
+    .reduce((sectionTypes, row) => {
+      sectionTypes[row.code] = row.desc;
+      return sectionTypes;
+    }, {});
+}
+
 function hydrateSongs(db) {
   return db
     .prepare(
-      `SELECT id, title, ccli_num, lyrics_json, section_order_json
+      `SELECT songs.id, songs.title, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
+              COALESCE(songaudit.initial, 0) AS initial,
+              COALESCE(songaudit.chordPlay, 0) AS chordPlay
        FROM songs
+       LEFT JOIN songaudit ON songaudit.song_id = songs.id
        ORDER BY title ASC`,
     )
     .all()
@@ -18,6 +35,10 @@ function hydrateSongs(db) {
       id: song.id,
       title: song.title,
       ccliNum: song.ccli_num,
+      audit: {
+        initial: Boolean(song.initial),
+        chordPlay: Boolean(song.chordPlay),
+      },
       sections: Object.fromEntries(
         Object.entries(JSON.parse(song.lyrics_json)).map(([sectionId, content]) => [
           sectionId,
@@ -33,6 +54,10 @@ function mapSongRow(song) {
     id: song.id,
     title: song.title,
     ccliNum: song.ccli_num,
+    audit: {
+      initial: Boolean(song.initial),
+      chordPlay: Boolean(song.chordPlay),
+    },
     sections: Object.fromEntries(
       Object.entries(JSON.parse(song.lyrics_json)).map(([sectionId, content]) => [
         sectionId,
@@ -41,6 +66,28 @@ function mapSongRow(song) {
     ),
     sectionOrder: JSON.parse(song.section_order_json),
   };
+}
+
+function formatSectionLabel(sectionId, sectionTypes) {
+  const normalizedId = String(sectionId || "").trim();
+  if (!normalizedId) {
+    return "";
+  }
+
+  if (/^\d+$/.test(normalizedId)) {
+    const verseLabel = sectionTypes.V || "Verse";
+    return `${verseLabel} ${normalizedId}`;
+  }
+
+  const match = normalizedId.match(/^([A-Za-z]+)(\d*)$/);
+  if (!match) {
+    return normalizedId;
+  }
+
+  const code = match[1].toUpperCase();
+  const ordinal = match[2];
+  const description = sectionTypes[code] || code;
+  return ordinal ? `${description} ${ordinal}` : description;
 }
 
 function validateSongInput(input) {
@@ -110,6 +157,7 @@ function validateSongInput(input) {
 function createRepository(db) {
   const songs = [];
   const songsById = new Map();
+  let sectionTypes = hydrateSectionTypes(db);
 
   const insertSong = db.prepare(
     `INSERT INTO songs (title, ccli_num, lyrics_json, section_order_json)
@@ -125,13 +173,30 @@ function createRepository(db) {
      WHERE id = @id`,
   );
   const selectSongById = db.prepare(
-    `SELECT id, title, ccli_num, lyrics_json, section_order_json
+    `SELECT songs.id, songs.title, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
+            COALESCE(songaudit.initial, 0) AS initial,
+            COALESCE(songaudit.chordPlay, 0) AS chordPlay
      FROM songs
-     WHERE id = ?`,
+     LEFT JOIN songaudit ON songaudit.song_id = songs.id
+     WHERE songs.id = ?`,
   );
   const deleteSong = db.prepare("DELETE FROM songs WHERE id = ?");
+  const ensureSongAudit = db.prepare(
+    `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay)
+     VALUES (?, 'check', 0, 0)
+     ON CONFLICT(song_id) DO NOTHING`,
+  );
+  const markSongEdited = db.prepare(
+    `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay, updated_at)
+     VALUES (?, 'edit', 1, 0, CURRENT_TIMESTAMP)
+     ON CONFLICT(song_id) DO UPDATE SET
+       audit_type = 'edit',
+       initial = 1,
+       updated_at = CURRENT_TIMESTAMP`,
+  );
 
   function refreshSongs() {
+    sectionTypes = hydrateSectionTypes(db);
     songs.length = 0;
     songsById.clear();
 
@@ -158,6 +223,7 @@ function createRepository(db) {
     if (savedSongId == null) {
       const result = insertSong.run(payload);
       savedSongId = Number(result.lastInsertRowid);
+      ensureSongAudit.run(savedSongId);
     } else {
       const result = updateSong.run({
         id: savedSongId,
@@ -166,6 +232,7 @@ function createRepository(db) {
       if (result.changes === 0) {
         return null;
       }
+      markSongEdited.run(savedSongId);
     }
 
     const songRow = selectSongById.get(savedSongId);
@@ -183,11 +250,20 @@ function createRepository(db) {
     get songs() {
       return songs;
     },
-    listSongSummaries() {
-      return songs.map((song) => ({
-        id: song.id,
-        title: song.title,
-      }));
+    get sectionTypes() {
+      return sectionTypes;
+    },
+    listSongSummaries({ initial = null } = {}) {
+      return songs
+        .filter((song) => (typeof initial === "boolean" ? song.audit.initial === initial : true))
+        .map((song) => ({
+          id: song.id,
+          title: song.title,
+          audit: song.audit,
+        }));
+    },
+    getSectionLabel(sectionId) {
+      return formatSectionLabel(sectionId, sectionTypes);
     },
     getSong(songId) {
       const numericSongId = Number(songId);
@@ -245,7 +321,44 @@ function ensureSongsSchema(db) {
       columnNames.includes("lyrics_json") &&
       columnNames.includes("section_order_json");
     if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS songaudit");
       db.exec("DROP TABLE IF EXISTS songs");
+    }
+  }
+
+  const sectionTypesTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'section_types'")
+    .get();
+
+  if (sectionTypesTable) {
+    const columns = db.prepare("PRAGMA table_info(section_types)").all();
+    const columnNames = columns.map((column) => column.name);
+    const hasExpectedColumns = columnNames.includes("code") && columnNames.includes("desc");
+
+    if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS section_types");
+    }
+  }
+
+  const songAuditTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'songaudit'")
+    .get();
+
+  if (songAuditTable) {
+    const columns = db.prepare("PRAGMA table_info(songaudit)").all();
+    const columnNames = columns.map((column) => column.name);
+    const hasExpectedColumns =
+      columnNames.includes("song_id") &&
+      columnNames.includes("audit_type") &&
+      columnNames.includes("initial") &&
+      columnNames.includes("chordPlay") &&
+      columnNames.includes("audit_status") &&
+      columnNames.includes("audit_note") &&
+      columnNames.includes("created_at") &&
+      columnNames.includes("updated_at");
+
+    if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS songaudit");
     }
   }
 
@@ -271,14 +384,29 @@ function initializeDatabase() {
       `INSERT INTO songs (id, title, ccli_num, lyrics_json, section_order_json)
        VALUES (@id, @title, @ccli_num, @lyrics_json, @section_order_json)`,
     );
+    const insertAudit = db.prepare(
+      `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay)
+       VALUES (@song_id, 'check', 0, 0)`,
+    );
 
     const seed = db.transaction(() => {
       for (const song of seedData) {
         insertSong.run(song);
+        insertAudit.run({ song_id: song.id });
       }
     });
 
     seed();
+  } else {
+    const insertMissingAudit = db.prepare(
+      `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay)
+       SELECT songs.id, 'check', 0, 0
+       FROM songs
+       LEFT JOIN songaudit ON songaudit.song_id = songs.id
+       WHERE songaudit.song_id IS NULL`,
+    );
+
+    insertMissingAudit.run();
   }
 
   return {

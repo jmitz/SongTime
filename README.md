@@ -70,7 +70,7 @@ git config core.hooksPath .githooks
 
 - Song data is loaded from `documents/SongBook-extracted.md` and normalized into a single inline-chord lyrics field.
 - Songs initialize into a local SQLite database at `data/songlist.db`.
-- `editor.html` lets you create songs and edit titles, CCLI numbers, section order, and section content directly in that SQLite database.
+- `editor.html` lets you create songs and edit titles, CCLI numbers, section order, and section content directly in that SQLite database, with an initial-edit filter backed by `songaudit`.
 - Docker runs can use the same local `data/songlist.db` by mounting `./data` to `/app/data`.
 - Docker Compose also bind-mounts the local web/server source files into `/app`, so the container uses your local copies of the app code and static assets.
 - The live session stays in server memory for this single-instance app, so connected counts and the current position reset on restart.
@@ -79,7 +79,7 @@ git config core.hooksPath .githooks
 
 ## Database Foundation
 
-- `db/schema.sql` now defines a single `songs` table with an integer `id`, a text `ccli_num`, and section metadata stored as JSON in the row.
+- `db/schema.sql` defines the `songs` table, a `section_types` lookup table for labels like Verse and Chorus, and a `songaudit` table that tracks current edit/check flags like `initial` and `chordPlay`.
 - `db/seed-data.js` transforms the current markdown songbook into song rows for that table.
 - `db/sqlite.js` creates the SQLite database, applies the schema, and seeds songs into it when the database is empty.
 - `lib/songbook.js` now holds the parsing and normalization logic so the app and future database seed/import steps share the same source of truth.

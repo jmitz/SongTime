@@ -33,6 +33,7 @@ function getCurrentSection(song = getCurrentSong()) {
   return sectionId
     ? {
         id: sectionId,
+        label: repository.getSectionLabel(sectionId),
         ...song.sections[sectionId],
       }
     : null;
@@ -51,9 +52,13 @@ function serializeState() {
   };
 }
 
-app.get("/api/songs", (_req, res) => {
+app.get("/api/songs", (req, res) => {
+  const initialQuery = req.query.initial;
+  const initialFilter =
+    initialQuery === "true" ? true : initialQuery === "false" ? false : null;
+
   res.json({
-    songs: repository.listSongSummaries(),
+    songs: repository.listSongSummaries({ initial: initialFilter }),
   });
 });
 
@@ -64,7 +69,14 @@ app.get("/api/songs/:id", (req, res) => {
     return;
   }
 
-  res.json({ song });
+  res.json({
+    song,
+    sectionTypes: repository.sectionTypes,
+  });
+});
+
+app.get("/api/section-types", (_req, res) => {
+  res.json({ sectionTypes: repository.sectionTypes });
 });
 
 function handleSongMutation(req, res, saveSong) {
