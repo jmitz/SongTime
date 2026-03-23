@@ -7,6 +7,9 @@ const userCount = document.getElementById("user-count");
 const editModeToggle = document.getElementById("edit-mode-toggle");
 const editStatus = document.getElementById("edit-status");
 const leaderEditActions = document.getElementById("leader-edit-actions");
+const newChordInput = document.getElementById("new-chord-input");
+const insertChordButton = document.getElementById("insert-chord-button");
+const deleteChordButton = document.getElementById("delete-chord-button");
 const saveChordsButton = document.getElementById("save-chords-button");
 const resetChordsButton = document.getElementById("reset-chords-button");
 
@@ -22,6 +25,8 @@ let draftSectionLines = null;
 let draftDirty = false;
 let dragState = null;
 let measuredCharacterWidth = null;
+let selectedChord = null;
+let insertMode = false;
 
 function resolveSection(song, section, sectionIndex = 0) {
   if (section) {
@@ -180,6 +185,22 @@ function setEditStatus(message, isError = false) {
   editStatus.classList.toggle("pill-error", isError);
 }
 
+function clearSelectedChord() {
+  selectedChord = null;
+}
+
+function findChordIndex(lineIndex, chordOrder) {
+  return draftSectionLines?.[lineIndex]?.chords.findIndex((chord) => chord.order === chordOrder) ?? -1;
+}
+
+function getNextChordOrder(line) {
+  if (!line?.chords?.length) {
+    return 0;
+  }
+
+  return Math.max(...line.chords.map((chord) => chord.order)) + 1;
+}
+
 function isEditModeEnabled() {
   return editModeToggle.checked;
 }
@@ -187,14 +208,21 @@ function isEditModeEnabled() {
 function updateEditControls() {
   const enabled = isEditModeEnabled();
   leaderEditActions.hidden = !enabled;
+  newChordInput.disabled = !enabled || isSaving;
+  insertChordButton.disabled = !enabled || isSaving;
+  deleteChordButton.disabled = !enabled || isSaving || !selectedChord;
   saveChordsButton.disabled = !enabled || !draftDirty || isSaving;
   resetChordsButton.disabled = !enabled || isSaving || !draftSectionLines;
+  insertChordButton.classList.toggle("button-danger", insertMode);
+  insertChordButton.classList.toggle("button-secondary", !insertMode);
 }
 
 function syncEditPanel() {
   const enabled = isEditModeEnabled();
 
   if (!enabled) {
+    insertMode = false;
+    clearSelectedChord();
     setEditStatus("Edit mode off");
     updateEditControls();
     return;
@@ -210,6 +238,8 @@ function syncEditPanel() {
 
   if (isSaving) {
     setEditStatus("Saving...");
+  } else if (insertMode) {
+    setEditStatus("Click a lyric line to place the new chord");
   } else if (draftDirty) {
     setEditStatus("Unsaved chord changes");
   } else {
@@ -231,6 +261,9 @@ function createChordRow(line, lineIndex, editable) {
   const track = document.createElement("div");
   track.className = "leader-chord-track";
   track.dataset.lineIndex = String(lineIndex);
+  if (editable && insertMode) {
+    track.classList.add("leader-chord-track-insert");
+  }
 
   const columns = Math.max(
     1,
@@ -252,6 +285,14 @@ function createChordRow(line, lineIndex, editable) {
     marker.style.left = `${chord.position * getCharacterWidth()}px`;
     marker.dataset.lineIndex = String(lineIndex);
     marker.dataset.chordOrder = String(chord.order);
+    if (
+      editable &&
+      selectedChord &&
+      selectedChord.lineIndex === lineIndex &&
+      selectedChord.chordOrder === chord.order
+    ) {
+      marker.classList.add("leader-chord-marker-selected");
+    }
 
     if (editable) {
       marker.type = "button";
@@ -401,6 +442,8 @@ function startDrag(event) {
   }
 
   event.preventDefault();
+  insertMode = false;
+  selectedChord = { lineIndex, chordOrder };
   dragState = {
     pointerId: event.pointerId,
     marker,
@@ -410,6 +453,8 @@ function startDrag(event) {
   };
 
   marker.classList.add("leader-chord-marker-active");
+  setEditStatus("Dragging chord");
+  updateEditControls();
   window.addEventListener("pointermove", handleDragMove);
   window.addEventListener("pointerup", finishDrag);
   window.addEventListener("pointercancel", finishDrag);
@@ -458,6 +503,74 @@ function finishDrag(event) {
   }
 }
 
+function selectChord(marker) {
+  const lineIndex = Number(marker.dataset.lineIndex);
+  const chordOrder = Number(marker.dataset.chordOrder);
+  if (!Number.isInteger(lineIndex) || !Number.isInteger(chordOrder)) {
+    return;
+  }
+
+  insertMode = false;
+  selectedChord = { lineIndex, chordOrder };
+  renderSong(currentSong, currentSection);
+}
+
+function insertChordAtTrack(track, clientX) {
+  if (!draftSectionLines) {
+    return;
+  }
+
+  const chordText = newChordInput.value.trim();
+  if (!chordText) {
+    setEditStatus("Enter a chord to insert", true);
+    newChordInput.focus();
+    return;
+  }
+
+  const lineIndex = Number(track.dataset.lineIndex);
+  const line = draftSectionLines[lineIndex];
+  if (!Number.isInteger(lineIndex) || !line) {
+    return;
+  }
+
+  const trackRect = track.getBoundingClientRect();
+  const nextPosition = Math.max(
+    0,
+    Math.min(line.lyrics.length, Math.round((clientX - trackRect.left) / getCharacterWidth())),
+  );
+  const chordOrder = getNextChordOrder(line);
+  line.chords.push({
+    text: chordText,
+    position: nextPosition,
+    order: chordOrder,
+  });
+
+  draftDirty = true;
+  insertMode = false;
+  selectedChord = { lineIndex, chordOrder };
+  renderSong(currentSong, currentSection);
+  setEditStatus("Chord inserted");
+}
+
+function deleteSelectedChord() {
+  if (!selectedChord || !draftSectionLines) {
+    return;
+  }
+
+  const chordIndex = findChordIndex(selectedChord.lineIndex, selectedChord.chordOrder);
+  if (chordIndex < 0) {
+    clearSelectedChord();
+    renderSong(currentSong, currentSection);
+    return;
+  }
+
+  draftSectionLines[selectedChord.lineIndex].chords.splice(chordIndex, 1);
+  draftDirty = true;
+  clearSelectedChord();
+  renderSong(currentSong, currentSection);
+  setEditStatus("Chord deleted");
+}
+
 async function saveChordChanges() {
   if (!currentSong || !currentSection || !draftSectionLines) {
     setEditStatus("No section selected", true);
@@ -499,6 +612,8 @@ async function saveChordChanges() {
     currentSong = data.song;
     currentSection = resolveSection(data.song, null, currentSectionIndex);
     resetDraft(currentSection?.content || "");
+    insertMode = false;
+    clearSelectedChord();
     renderSong(data.song, currentSection);
     setEditStatus("Chord changes saved");
   } catch (error) {
@@ -520,6 +635,8 @@ songSelect.addEventListener("change", () => {
 editModeToggle.addEventListener("change", () => {
   if (isEditModeEnabled()) {
     ensureDraftForCurrentSection();
+    insertMode = false;
+    clearSelectedChord();
   }
 
   if (currentSong && currentSection) {
@@ -534,17 +651,47 @@ saveChordsButton.addEventListener("click", () => {
   saveChordChanges();
 });
 
+insertChordButton.addEventListener("click", () => {
+  insertMode = !insertMode;
+  if (insertMode) {
+    clearSelectedChord();
+  }
+  renderSong(currentSong, currentSection);
+});
+
+deleteChordButton.addEventListener("click", () => {
+  deleteSelectedChord();
+});
+
 resetChordsButton.addEventListener("click", () => {
   if (!currentSection) {
     return;
   }
 
   resetDraft(currentSection.content || "");
+  insertMode = false;
+  clearSelectedChord();
   renderSong(currentSong, currentSection);
   setEditStatus("Draft reset");
 });
 
 songContent.addEventListener("pointerdown", startDrag);
+songContent.addEventListener("click", (event) => {
+  if (!isEditModeEnabled()) {
+    return;
+  }
+
+  const marker = event.target.closest(".leader-chord-marker-draggable");
+  if (marker) {
+    selectChord(marker);
+    return;
+  }
+
+  const track = event.target.closest(".leader-chord-track");
+  if (track && insertMode) {
+    insertChordAtTrack(track, event.clientX);
+  }
+});
 
 window.addEventListener("keydown", (event) => {
   if (event.repeat) {
@@ -553,6 +700,12 @@ window.addEventListener("keydown", (event) => {
 
   const target = event.target;
   if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+    return;
+  }
+
+  if (isEditModeEnabled() && selectedChord && (event.key === "Delete" || event.key === "Backspace")) {
+    event.preventDefault();
+    deleteSelectedChord();
     return;
   }
 

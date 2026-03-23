@@ -313,6 +313,10 @@ textarea {
   min-height: 2.8em;
 }
 
+.leader-chord-track-insert {
+  cursor: copy;
+}
+
 .leader-lyric-line {
   display: block;
   padding-top: 1.3em;
@@ -343,6 +347,12 @@ textarea {
 
 .leader-chord-marker-active {
   cursor: grabbing;
+}
+
+.leader-chord-marker-selected {
+  color: #8c3f1f;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
 }
 
 .chord-row {
