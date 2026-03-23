@@ -28,8 +28,14 @@
         </label>
         <div id="edit-status" class="pill">Edit mode off</div>
         <div id="leader-edit-actions" class="leader-edit-actions" hidden>
-          <p class="muted">Drag chords directly in the song display, then save the new positions.</p>
+          <p class="muted">Drag chords in the song display, insert new ones, or select a chord to delete it.</p>
+          <label class="field">
+            <span>New chord</span>
+            <input id="new-chord-input" type="text" placeholder="C, Am, F/G" />
+          </label>
           <div class="editor-actions">
+            <button id="insert-chord-button" class="button button-secondary" type="button">Insert chord</button>
+            <button id="delete-chord-button" class="button button-secondary" type="button">Delete selected</button>
             <button id="save-chords-button" class="button" type="button">Save chord changes</button>
             <button id="reset-chords-button" class="button button-secondary" type="button">Reset draft</button>
           </div>
