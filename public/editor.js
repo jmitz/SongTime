@@ -5,14 +5,17 @@ const addSectionButtons = document.querySelectorAll(".add-section-button");
 const saveStatus = document.getElementById("save-status");
 const editorTitle = document.getElementById("editor-title");
 const songForm = document.getElementById("song-form");
+const initialFilterInput = document.getElementById("initial-filter-input");
 const songTitleInput = document.getElementById("song-title-input");
 const songCcliInput = document.getElementById("song-ccli-input");
+const songInitialInput = document.getElementById("song-initial-input");
 const sectionOrderInput = document.getElementById("section-order-input");
 const sectionsContainer = document.getElementById("sections-container");
 const deleteSongButton = document.getElementById("delete-song-button");
 
 let songs = [];
 let activeSongId = null;
+let activeSong = null;
 
 function setStatus(message, isError = false) {
   saveStatus.textContent = message;
@@ -80,10 +83,12 @@ function populateSections(sections) {
 }
 
 function setFormSong(song) {
+  activeSong = song ?? null;
   activeSongId = song?.id ?? null;
   editorTitle.textContent = song?.title || "New song";
   songTitleInput.value = song?.title || "";
   songCcliInput.value = song?.ccliNum || "";
+  songInitialInput.checked = Boolean(song?.audit?.initial);
   sectionOrderInput.value = song?.sectionOrder?.join(", ") || "1";
   populateSections(song?.sections || { 1: { content: "" } });
   deleteSongButton.disabled = activeSongId == null;
@@ -152,7 +157,12 @@ function renderSongList() {
 }
 
 async function loadSongLibrary(selectedSongId = activeSongId) {
-  const response = await fetch("/api/songs");
+  const params = new URLSearchParams();
+  if (initialFilterInput.checked) {
+    params.set("initial", "false");
+  }
+
+  const response = await fetch(`/api/songs${params.size > 0 ? `?${params.toString()}` : ""}`);
   if (!response.ok) {
     throw new Error("Unable to load songs.");
   }
@@ -189,6 +199,12 @@ songSearch.addEventListener("input", () => {
   renderSongList();
 });
 
+initialFilterInput.addEventListener("change", () => {
+  loadSongLibrary().catch((error) => {
+    setStatus(error.message, true);
+  });
+});
+
 newSongButton.addEventListener("click", () => {
   setFormSong(null);
   setStatus("Ready for a new song");
@@ -206,12 +222,13 @@ deleteSongButton.addEventListener("click", async () => {
   }
 
   const song = songs.find((entry) => entry.id === activeSongId);
-  if (!song) {
-    setStatus("Song not found in the current list.", true);
+  if (!song && !activeSong) {
+    setStatus("Song not found.", true);
     return;
   }
 
-  if (!window.confirm(`Delete "${song.title}"? This cannot be undone.`)) {
+  const targetSong = song || activeSong;
+  if (!window.confirm(`Delete "${targetSong.title}"? This cannot be undone.`)) {
     return;
   }
 
@@ -225,15 +242,8 @@ deleteSongButton.addEventListener("click", async () => {
       throw new Error(data.error || "Unable to delete song.");
     }
 
-    songs = data.songs;
-    const nextSong = songs.find((entry) => entry.id === data.currentSongId) || songs[0] || null;
     setFormSong(null);
-
-    if (nextSong) {
-      await loadSong(nextSong.id);
-    } else {
-      setStatus("Song deleted");
-    }
+    await loadSongLibrary(data.currentSongId);
 
     setStatus("Song deleted");
   } catch (error) {
@@ -262,7 +272,8 @@ songForm.addEventListener("submit", async (event) => {
       throw new Error(data.error || "Unable to save song.");
     }
 
-    songs = data.songs;
+    setFormSong(data.song);
+    await loadSongLibrary(data.song.id);
     setFormSong(data.song);
     setStatus(isEditing ? "Song updated" : "Song created");
   } catch (error) {

@@ -9,17 +9,31 @@ CREATE TABLE IF NOT EXISTS songs (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS section_types (
+  code TEXT PRIMARY KEY,
+  desc TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS songaudit (
   id INTEGER PRIMARY KEY,
-  song_id INTEGER NOT NULL,
-  audit_type TEXT NOT NULL CHECK (audit_type IN ('edit', 'check')),
+  song_id INTEGER NOT NULL UNIQUE,
+  audit_type TEXT NOT NULL DEFAULT 'check' CHECK (audit_type IN ('edit', 'check')),
   initial INTEGER NOT NULL DEFAULT 0,
   chordPlay INTEGER NOT NULL DEFAULT 0,
   audit_status TEXT NOT NULL DEFAULT 'recorded',
   audit_note TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_songaudit_song_id_created_at
-ON songaudit (song_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_songaudit_initial_song_id
+ON songaudit (initial, song_id);
+
+INSERT INTO section_types (code, desc) VALUES
+  ('V', 'Verse'),
+  ('C', 'Chorus'),
+  ('B', 'Bridge'),
+  ('E', 'Ending')
+ON CONFLICT(code) DO UPDATE SET
+  desc = excluded.desc;

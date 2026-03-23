@@ -40,15 +40,27 @@ function formatSectionLabel(section) {
     return "";
   }
 
-  if (section.id === "C") {
-    return "Chorus";
+  if (section.label) {
+    return section.label;
   }
 
-  if (section.id === "B") {
-    return "Bridge";
+  if (/^\d+$/.test(section.id)) {
+    return `Verse ${section.id}`;
   }
 
-  return `Verse ${section.id}`;
+  const match = section.id.match(/^([A-Za-z]+)(\d*)$/);
+  if (!match) {
+    return section.id;
+  }
+
+  const lookup = {
+    V: "Verse",
+    C: "Chorus",
+    B: "Bridge",
+    E: "Ending",
+  };
+  const description = lookup[match[1].toUpperCase()] || match[1].toUpperCase();
+  return match[2] ? `${description} ${match[2]}` : description;
 }
 
 function renderSong(song, section) {

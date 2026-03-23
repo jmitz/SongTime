@@ -19,6 +19,10 @@
           <span>Song library</span>
           <input id="song-search" type="search" placeholder="Filter by title" />
         </label>
+        <label class="toggle">
+          <input id="initial-filter-input" type="checkbox" checked />
+          <span>Only show songs needing initial edit</span>
+        </label>
         <div id="song-list" class="song-list" aria-live="polite"></div>
         <a class="text-link" href="/leader.html">Open the leader view</a>
       </aside>
@@ -41,6 +45,11 @@
           <label class="field">
             <span>CCLI Number</span>
             <input id="song-ccli-input" name="ccli" type="text" />
+          </label>
+
+          <label class="toggle">
+            <input id="song-initial-input" name="initial" type="checkbox" disabled />
+            <span>Initial edit completed</span>
           </label>
 
           <label class="field">
