@@ -302,6 +302,77 @@ textarea {
   font-family: var(--mono);
 }
 
+.leader-chord-row {
+  min-height: 2.8em;
+  white-space: normal;
+}
+
+.leader-chord-track {
+  position: relative;
+  display: inline-block;
+  min-height: 2.8em;
+}
+
+.leader-lyric-line {
+  display: block;
+  padding-top: 1.3em;
+  white-space: pre;
+}
+
+.leader-chord-marker {
+  position: absolute;
+  top: 0;
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: pre;
+}
+
+.leader-chord-marker-draggable {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+}
+
+.leader-chord-marker-draggable:hover,
+.leader-chord-marker-active {
+  color: #8c3f1f;
+  text-decoration: underline;
+}
+
+.leader-chord-marker-active {
+  cursor: grabbing;
+}
+
+.chord-row {
+  min-height: 1.8em;
+  white-space: pre;
+}
+
+.chord-segment {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: top;
+}
+
+.chord-marker,
+.lyric-segment {
+  display: block;
+  white-space: pre;
+}
+
+.chord-marker {
+  min-height: 1.2em;
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.chord-marker-empty {
+  visibility: hidden;
+}
+
 .user-content {
   font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(1.4rem, 2.4vw, 2.1rem);
@@ -355,6 +426,11 @@ textarea {
 
 .editor-header {
   margin-bottom: 0;
+}
+
+.leader-edit-actions {
+  display: grid;
+  gap: 18px;
 }
 
 .editor-form,

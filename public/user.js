@@ -78,13 +78,93 @@ function toLyricsOnly(content) {
     .trim();
 }
 
+function parseChordSegments(line) {
+  const segments = [];
+  const pattern = /\[([^[\]]+)\]/g;
+  let lastIndex = 0;
+  let pendingChord = "";
+  let match;
+
+  while ((match = pattern.exec(line)) !== null) {
+    const lyricText = line.slice(lastIndex, match.index);
+    if (lyricText || pendingChord) {
+      segments.push({
+        chord: pendingChord,
+        lyric: lyricText,
+      });
+    }
+
+    pendingChord = match[1];
+    lastIndex = pattern.lastIndex;
+  }
+
+  const trailingLyric = line.slice(lastIndex);
+  if (trailingLyric || pendingChord || segments.length === 0) {
+    segments.push({
+      chord: pendingChord,
+      lyric: trailingLyric,
+    });
+  }
+
+  return segments;
+}
+
+function renderChordContent(content) {
+  const fragment = document.createDocumentFragment();
+  const lines = String(content || "").split("\n");
+
+  for (const line of lines) {
+    const row = document.createElement("div");
+    row.className = "chord-row";
+
+    if (line === "") {
+      row.append(document.createElement("br"));
+      fragment.append(row);
+      continue;
+    }
+
+    const segments = parseChordSegments(line);
+    const hasChords = segments.some((segment) => segment.chord);
+
+    if (!hasChords) {
+      row.textContent = line;
+      fragment.append(row);
+      continue;
+    }
+
+    for (const segment of segments) {
+      const wrapper = document.createElement("span");
+      wrapper.className = "chord-segment";
+
+      const chord = document.createElement("span");
+      chord.className = "chord-marker";
+      chord.textContent = segment.chord || " ";
+      if (!segment.chord) {
+        chord.classList.add("chord-marker-empty");
+      }
+
+      const lyric = document.createElement("span");
+      lyric.className = "lyric-segment";
+      lyric.textContent = segment.lyric || " ";
+
+      wrapper.append(chord, lyric);
+      row.append(wrapper);
+    }
+
+    fragment.append(row);
+  }
+
+  return fragment;
+}
+
 function renderSong(song, section) {
   currentSong = song;
   currentSection = section;
   songTitle.textContent = song.title;
   sectionLabel.textContent = formatSectionLabel(section);
+
   if (getShowChords()) {
-    songContent.innerHTML = window.SongRender.renderChordedSongHtml(section?.content || "");
+    songContent.replaceChildren(renderChordContent(section?.content || ""));
   } else {
     songContent.textContent = toLyricsOnly(section?.content || "");
   }
