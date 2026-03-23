@@ -79,7 +79,7 @@ git config core.hooksPath .githooks
 
 ## Database Foundation
 
-- `db/schema.sql` now defines a single `songs` table with an integer `id`, a text `ccli_num`, and section metadata stored as JSON in the row.
+- `db/schema.sql` now defines a `songs` table with an integer `id`, text `authors`, a text `ccli_num`, and section metadata stored as JSON in the row, plus a `songaudit` table for edit/check history.
 - `db/seed-data.js` transforms the current markdown songbook into song rows for that table.
-- `db/sqlite.js` creates the SQLite database, applies the schema, and seeds songs into it when the database is empty.
+- `db/sqlite.js` creates the SQLite database, applies the schema, migrates the `authors` column onto existing song rows, and seeds songs into it when the database is empty.
 - `lib/songbook.js` now holds the parsing and normalization logic so the app and future database seed/import steps share the same source of truth.
