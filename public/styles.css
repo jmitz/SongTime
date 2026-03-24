@@ -300,12 +300,53 @@ textarea {
 
 .leader-content {
   font-family: var(--mono);
+  display: grid;
+  gap: 18px;
 }
 
 .leader-content-editing {
   display: grid;
   gap: 18px;
   align-content: start;
+}
+
+.leader-live-section {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(76, 54, 31, 0.08);
+  background: rgba(255, 250, 244, 0.72);
+}
+
+.leader-live-section-current {
+  border-color: rgba(179, 87, 47, 0.24);
+  background: rgba(255, 246, 237, 0.96);
+}
+
+.leader-live-section-next {
+  opacity: 0.88;
+}
+
+.leader-live-section-heading,
+.leader-live-section-name {
+  margin: 0;
+}
+
+.leader-live-section-heading {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.leader-live-section-name {
+  font-size: 1.15rem;
+}
+
+.leader-live-section-body {
+  overflow-x: auto;
 }
 
 .leader-section-card {

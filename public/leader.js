@@ -94,6 +94,15 @@ function getSectionById(song, sectionId) {
   };
 }
 
+function getNextSection(song, sectionIndex = currentSectionIndex) {
+  if (!song?.sectionOrder?.length) {
+    return null;
+  }
+
+  const nextSectionId = song.sectionOrder[sectionIndex + 1];
+  return getSectionById(song, nextSectionId);
+}
+
 function parseChordLine(line) {
   const chords = [];
   const pattern = /\[([^[\]]+)\]/g;
@@ -420,6 +429,31 @@ function renderAllSections(song) {
   return fragment;
 }
 
+function renderLiveSection(section, title, className = "") {
+  const card = document.createElement("section");
+  card.className = "leader-live-section";
+  if (className) {
+    card.classList.add(className);
+  }
+
+  const heading = document.createElement("p");
+  heading.className = "leader-live-section-heading";
+  heading.textContent = title;
+  card.append(heading);
+
+  const sectionName = document.createElement("h3");
+  sectionName.className = "leader-live-section-name";
+  sectionName.textContent = formatSectionLabel(section);
+  card.append(sectionName);
+
+  const body = document.createElement("div");
+  body.className = "leader-live-section-body";
+  body.append(renderChordContent(parseChordContent(section?.content || ""), false, section?.id || ""));
+  card.append(body);
+
+  return card;
+}
+
 function renderSong(song, section) {
   selectedSongId = song.id;
   currentSong = song;
@@ -436,8 +470,17 @@ function renderSong(song, section) {
     ensureDraftForCurrentSection();
     songContent.replaceChildren(renderAllSections(song));
   } else {
-    const renderedLines = parseChordContent(section?.content || "");
-    songContent.replaceChildren(renderChordContent(renderedLines, false, section?.id || ""));
+    const currentSectionCard = renderLiveSection(section, "Current Section", "leader-live-section-current");
+    const nextSection = getNextSection(song, currentSectionIndex);
+
+    if (nextSection) {
+      songContent.replaceChildren(
+        currentSectionCard,
+        renderLiveSection(nextSection, "Next Section", "leader-live-section-next"),
+      );
+    } else {
+      songContent.replaceChildren(currentSectionCard);
+    }
   }
 
   syncEditPanel();
