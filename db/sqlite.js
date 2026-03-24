@@ -103,6 +103,7 @@ function validateSongInput(input) {
   }
 
   const ccliNum = typeof input.ccliNum === "string" ? input.ccliNum.trim() : "";
+  const authors = typeof input.authors === "string" ? input.authors.trim() : "";
   const sectionOrder = Array.isArray(input.sectionOrder)
     ? input.sectionOrder.map((sectionId) => String(sectionId).trim()).filter(Boolean)
     : [];
@@ -150,6 +151,7 @@ function validateSongInput(input) {
 
   return {
     title,
+    authors,
     ccliNum: ccliNum || null,
     sections,
     sectionOrder,
@@ -162,12 +164,13 @@ function createRepository(db) {
   let sectionTypes = hydrateSectionTypes(db);
 
   const insertSong = db.prepare(
-    `INSERT INTO songs (title, ccli_num, lyrics_json, section_order_json)
-     VALUES (@title, @ccli_num, @lyrics_json, @section_order_json)`,
+    `INSERT INTO songs (title, authors, ccli_num, lyrics_json, section_order_json)
+     VALUES (@title, @authors, @ccli_num, @lyrics_json, @section_order_json)`,
   );
   const updateSong = db.prepare(
     `UPDATE songs
      SET title = @title,
+         authors = @authors,
          ccli_num = @ccli_num,
          lyrics_json = @lyrics_json,
          section_order_json = @section_order_json,
@@ -212,6 +215,7 @@ function createRepository(db) {
     const validatedSong = validateSongInput(songInput);
     const payload = {
       title: validatedSong.title,
+      authors: validatedSong.authors,
       ccli_num: validatedSong.ccliNum,
       lyrics_json: JSON.stringify(
         Object.fromEntries(

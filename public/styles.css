@@ -302,6 +302,41 @@ textarea {
   font-family: var(--mono);
 }
 
+.leader-content-editing {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.leader-section-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(76, 54, 31, 0.08);
+  background: rgba(255, 250, 244, 0.72);
+  cursor: pointer;
+}
+
+.leader-section-card-active {
+  border-color: rgba(179, 87, 47, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(179, 87, 47, 0.2);
+  background: rgba(255, 245, 235, 0.92);
+}
+
+.leader-section-heading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.leader-section-body {
+  overflow-x: auto;
+}
+
 .leader-chord-row {
   min-height: 2.8em;
   white-space: normal;

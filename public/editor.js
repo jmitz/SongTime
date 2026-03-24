@@ -7,6 +7,7 @@ const editorTitle = document.getElementById("editor-title");
 const songForm = document.getElementById("song-form");
 const initialFilterInput = document.getElementById("initial-filter-input");
 const songTitleInput = document.getElementById("song-title-input");
+const songAuthorsInput = document.getElementById("song-authors-input");
 const songCcliInput = document.getElementById("song-ccli-input");
 const songInitialInput = document.getElementById("song-initial-input");
 const sectionOrderInput = document.getElementById("section-order-input");
@@ -87,6 +88,7 @@ function setFormSong(song) {
   activeSongId = song?.id ?? null;
   editorTitle.textContent = song?.title || "New song";
   songTitleInput.value = song?.title || "";
+  songAuthorsInput.value = song?.authors || "";
   songCcliInput.value = song?.ccliNum || "";
   songInitialInput.checked = Boolean(song?.audit?.initial);
   sectionOrderInput.value = song?.sectionOrder?.join(", ") || "1";
@@ -119,6 +121,7 @@ function getFormPayload() {
 
   return {
     title: songTitleInput.value.trim(),
+    authors: songAuthorsInput.value.trim(),
     ccliNum: songCcliInput.value.trim(),
     sectionOrder: sectionOrderInput.value
       .split(",")

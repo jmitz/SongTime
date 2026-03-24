@@ -23,6 +23,7 @@ let isSaving = false;
 let draftSectionKey = null;
 let draftSectionLines = null;
 let draftDirty = false;
+const draftSections = new Map();
 let dragState = null;
 let measuredCharacterWidth = null;
 let selectedChord = null;
@@ -80,6 +81,17 @@ function getCurrentSectionKey(song = currentSong, section = currentSection) {
   }
 
   return `${song.id}:${section.id}`;
+}
+
+function getSectionById(song, sectionId) {
+  if (!song || !sectionId || !song.sections?.[sectionId]) {
+    return null;
+  }
+
+  return {
+    id: sectionId,
+    ...song.sections[sectionId],
+  };
 }
 
 function parseChordLine(line) {
@@ -160,10 +172,16 @@ function invalidateCharacterWidth() {
   measuredCharacterWidth = null;
 }
 
-function resetDraft(content = currentSection?.content || "") {
-  draftSectionKey = getCurrentSectionKey();
+function resetDraft(content = currentSection?.content || "", song = currentSong, section = currentSection) {
+  draftSectionKey = getCurrentSectionKey(song, section);
   draftSectionLines = parseChordContent(content);
   draftDirty = false;
+  if (draftSectionKey) {
+    draftSections.set(draftSectionKey, {
+      lines: draftSectionLines,
+      dirty: false,
+    });
+  }
 }
 
 function ensureDraftForCurrentSection() {
@@ -175,9 +193,55 @@ function ensureDraftForCurrentSection() {
     return;
   }
 
-  if (draftSectionKey !== currentKey || !draftSectionLines) {
-    resetDraft();
+  if (draftSectionKey === currentKey && draftSectionLines) {
+    return;
   }
+
+  const existingDraft = draftSections.get(currentKey);
+  if (existingDraft) {
+    draftSectionKey = currentKey;
+    draftSectionLines = existingDraft.lines;
+    draftDirty = existingDraft.dirty;
+    return;
+  }
+
+  resetDraft();
+}
+
+function setDraftDirty(nextDirty) {
+  draftDirty = nextDirty;
+  if (draftSectionKey && draftSectionLines) {
+    draftSections.set(draftSectionKey, {
+      lines: draftSectionLines,
+      dirty: nextDirty,
+    });
+  }
+}
+
+function clearDraftsForSong(songId = currentSong?.id) {
+  if (!songId) {
+    draftSections.clear();
+    return;
+  }
+
+  for (const key of draftSections.keys()) {
+    if (key.startsWith(`${songId}:`)) {
+      draftSections.delete(key);
+    }
+  }
+}
+
+function setCurrentSectionById(sectionId) {
+  const section = getSectionById(currentSong, sectionId);
+  if (!section) {
+    return;
+  }
+
+  currentSection = section;
+  currentSectionIndex = Math.max(0, currentSong.sectionOrder.indexOf(sectionId));
+  ensureDraftForCurrentSection();
+  insertMode = false;
+  clearSelectedChord();
 }
 
 function setEditStatus(message, isError = false) {
@@ -243,13 +307,13 @@ function syncEditPanel() {
   } else if (draftDirty) {
     setEditStatus("Unsaved chord changes");
   } else {
-    setEditStatus("Drag chords in the song view");
+    setEditStatus(`Editing ${formatSectionLabel(currentSection)} in the full song view`);
   }
 
   updateEditControls();
 }
 
-function createChordRow(line, lineIndex, editable) {
+function createChordRow(line, lineIndex, editable, sectionId = "") {
   const row = document.createElement("div");
   row.className = "leader-chord-row";
 
@@ -261,6 +325,7 @@ function createChordRow(line, lineIndex, editable) {
   const track = document.createElement("div");
   track.className = "leader-chord-track";
   track.dataset.lineIndex = String(lineIndex);
+  track.dataset.sectionId = sectionId;
   if (editable && insertMode) {
     track.classList.add("leader-chord-track-insert");
   }
@@ -285,6 +350,7 @@ function createChordRow(line, lineIndex, editable) {
     marker.style.left = `${chord.position * getCharacterWidth()}px`;
     marker.dataset.lineIndex = String(lineIndex);
     marker.dataset.chordOrder = String(chord.order);
+    marker.dataset.sectionId = sectionId;
     if (
       editable &&
       selectedChord &&
@@ -307,11 +373,48 @@ function createChordRow(line, lineIndex, editable) {
   return row;
 }
 
-function renderChordContent(lines, editable = false) {
+function renderChordContent(lines, editable = false, sectionId = "") {
   const fragment = document.createDocumentFragment();
 
   lines.forEach((line, lineIndex) => {
-    fragment.append(createChordRow(line, lineIndex, editable));
+    fragment.append(createChordRow(line, lineIndex, editable, sectionId));
+  });
+
+  return fragment;
+}
+
+function renderAllSections(song) {
+  const fragment = document.createDocumentFragment();
+
+  song.sectionOrder.forEach((sectionId) => {
+    const section = getSectionById(song, sectionId);
+    if (!section) {
+      return;
+    }
+
+    const sectionCard = document.createElement("section");
+    sectionCard.className = "leader-section-card";
+    sectionCard.dataset.sectionId = sectionId;
+
+    const selected = currentSection?.id === sectionId;
+    if (selected) {
+      sectionCard.classList.add("leader-section-card-active");
+    }
+
+    const heading = document.createElement("p");
+    heading.className = "leader-section-heading";
+    heading.textContent = formatSectionLabel(section);
+    sectionCard.append(heading);
+
+    const sectionBody = document.createElement("div");
+    sectionBody.className = "leader-section-body";
+    const sectionKey = getCurrentSectionKey(song, section);
+    const renderedLines =
+      selected && draftSectionKey === sectionKey ? draftSectionLines : parseChordContent(section.content || "");
+    sectionBody.append(renderChordContent(renderedLines, selected, sectionId));
+    sectionCard.append(sectionBody);
+
+    fragment.append(sectionCard);
   });
 
   return fragment;
@@ -322,18 +425,21 @@ function renderSong(song, section) {
   currentSong = song;
   currentSection = section;
   songTitle.textContent = song.title;
-  sectionLabel.textContent = formatSectionLabel(section);
+  sectionLabel.textContent = isEditModeEnabled()
+    ? currentSection
+      ? `Editing ${formatSectionLabel(currentSection)}`
+      : "All sections"
+    : formatSectionLabel(section);
+  songContent.classList.toggle("leader-content-editing", isEditModeEnabled());
 
   if (isEditModeEnabled()) {
     ensureDraftForCurrentSection();
+    songContent.replaceChildren(renderAllSections(song));
+  } else {
+    const renderedLines = parseChordContent(section?.content || "");
+    songContent.replaceChildren(renderChordContent(renderedLines, false, section?.id || ""));
   }
 
-  const renderedLines =
-    isEditModeEnabled() && draftSectionKey === getCurrentSectionKey()
-      ? draftSectionLines
-      : parseChordContent(section?.content || "");
-
-  songContent.replaceChildren(renderChordContent(renderedLines, isEditModeEnabled()));
   syncEditPanel();
 }
 
@@ -361,10 +467,23 @@ function applyState(state) {
     return;
   }
 
+  const songChanged = currentSong?.id !== state.currentSong.id;
   currentSectionIndex = state.currentSectionIndex;
-  renderSong(state.currentSong, resolveSection(state.currentSong, state.currentSection, state.currentSectionIndex));
+
+  let nextSection = resolveSection(state.currentSong, state.currentSection, state.currentSectionIndex);
+  if (isEditModeEnabled()) {
+    if (songChanged) {
+      clearDraftsForSong(currentSong?.id);
+    } else if (currentSection?.id) {
+      nextSection = getSectionById(state.currentSong, currentSection.id) || nextSection;
+    }
+  }
+
+  renderSong(state.currentSong, nextSection);
   songSelect.value = state.currentSongId;
-  applyScroll(state.scrollRatio);
+  if (!isEditModeEnabled()) {
+    applyScroll(state.scrollRatio);
+  }
 }
 
 function applyScroll(scrollRatio) {
@@ -391,7 +510,9 @@ function connect() {
     }
 
     if (message.type === "scroll") {
-      applyScroll(message.payload.scrollRatio);
+      if (!isEditModeEnabled()) {
+        applyScroll(message.payload.scrollRatio);
+      }
     }
 
     if (message.type === "songs") {
@@ -481,7 +602,7 @@ function handleDragMove(event) {
   }
 
   chord.position = nextPosition;
-  draftDirty = true;
+  setDraftDirty(true);
   dragState.marker.style.left = `${nextPosition * getCharacterWidth()}px`;
   setEditStatus("Unsaved chord changes");
   updateEditControls();
@@ -545,7 +666,7 @@ function insertChordAtTrack(track, clientX) {
     order: chordOrder,
   });
 
-  draftDirty = true;
+  setDraftDirty(true);
   insertMode = false;
   selectedChord = { lineIndex, chordOrder };
   renderSong(currentSong, currentSection);
@@ -565,7 +686,7 @@ function deleteSelectedChord() {
   }
 
   draftSectionLines[selectedChord.lineIndex].chords.splice(chordIndex, 1);
-  draftDirty = true;
+  setDraftDirty(true);
   clearSelectedChord();
   renderSong(currentSong, currentSection);
   setEditStatus("Chord deleted");
@@ -610,7 +731,8 @@ async function saveChordChanges() {
     }
 
     currentSong = data.song;
-    currentSection = resolveSection(data.song, null, currentSectionIndex);
+    clearDraftsForSong(data.song.id);
+    currentSection = getSectionById(data.song, currentSection?.id) || resolveSection(data.song, null, currentSectionIndex);
     resetDraft(currentSection?.content || "");
     insertMode = false;
     clearSelectedChord();
@@ -709,6 +831,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (isEditModeEnabled()) {
+    return;
+  }
+
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
   }
@@ -738,7 +864,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("scroll", () => {
-  if (suppressScrollBroadcast || !socket || socket.readyState !== WebSocket.OPEN) {
+  if (isEditModeEnabled() || suppressScrollBroadcast || !socket || socket.readyState !== WebSocket.OPEN) {
     return;
   }
 
@@ -751,6 +877,19 @@ window.addEventListener("resize", () => {
   invalidateCharacterWidth();
   if (currentSong && currentSection) {
     renderSong(currentSong, currentSection);
+  }
+});
+
+songContent.addEventListener("click", (event) => {
+  if (!isEditModeEnabled()) {
+    return;
+  }
+
+  const sectionCard = event.target.closest(".leader-section-card");
+  if (sectionCard?.dataset.sectionId && sectionCard.dataset.sectionId !== currentSection?.id) {
+    setCurrentSectionById(sectionCard.dataset.sectionId);
+    renderSong(currentSong, currentSection);
+    return;
   }
 });
 
