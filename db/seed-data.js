@@ -7,6 +7,7 @@ function loadSeedData() {
   return loadSongsFromFile(SONGBOOK_PATH).map((song, index) => ({
     id: index + 1,
     title: song.title,
+    author: song.author || null,
     ccli_num: song.ccliNum,
     lyrics_json: JSON.stringify(
       Object.fromEntries(

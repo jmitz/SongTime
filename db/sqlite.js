@@ -23,7 +23,7 @@ function hydrateSectionTypes(db) {
 function hydrateSongs(db) {
   return db
     .prepare(
-      `SELECT songs.id, songs.title, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
+      `SELECT songs.id, songs.title, songs.author, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
               COALESCE(songaudit.initial, 0) AS initial,
               COALESCE(songaudit.chordPlay, 0) AS chordPlay
        FROM songs
@@ -34,6 +34,7 @@ function hydrateSongs(db) {
     .map((song) => ({
       id: song.id,
       title: song.title,
+      author: song.author,
       ccliNum: song.ccli_num,
       audit: {
         initial: Boolean(song.initial),
@@ -53,6 +54,7 @@ function mapSongRow(song) {
   return {
     id: song.id,
     title: song.title,
+    author: song.author,
     ccliNum: song.ccli_num,
     audit: {
       initial: Boolean(song.initial),
@@ -101,6 +103,7 @@ function validateSongInput(input) {
   }
 
   const ccliNum = typeof input.ccliNum === "string" ? input.ccliNum.trim() : "";
+  const author = typeof input.author === "string" ? input.author.trim() : "";
   const sectionOrder = Array.isArray(input.sectionOrder)
     ? input.sectionOrder.map((sectionId) => String(sectionId).trim()).filter(Boolean)
     : [];
@@ -148,6 +151,7 @@ function validateSongInput(input) {
 
   return {
     title,
+    author: author || null,
     ccliNum: ccliNum || null,
     sections,
     sectionOrder,
@@ -160,12 +164,13 @@ function createRepository(db) {
   let sectionTypes = hydrateSectionTypes(db);
 
   const insertSong = db.prepare(
-    `INSERT INTO songs (title, ccli_num, lyrics_json, section_order_json)
-     VALUES (@title, @ccli_num, @lyrics_json, @section_order_json)`,
+    `INSERT INTO songs (title, author, ccli_num, lyrics_json, section_order_json)
+     VALUES (@title, @author, @ccli_num, @lyrics_json, @section_order_json)`,
   );
   const updateSong = db.prepare(
     `UPDATE songs
      SET title = @title,
+         author = @author,
          ccli_num = @ccli_num,
          lyrics_json = @lyrics_json,
          section_order_json = @section_order_json,
@@ -173,7 +178,7 @@ function createRepository(db) {
      WHERE id = @id`,
   );
   const selectSongById = db.prepare(
-    `SELECT songs.id, songs.title, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
+    `SELECT songs.id, songs.title, songs.author, songs.ccli_num, songs.lyrics_json, songs.section_order_json,
             COALESCE(songaudit.initial, 0) AS initial,
             COALESCE(songaudit.chordPlay, 0) AS chordPlay
      FROM songs
@@ -210,6 +215,7 @@ function createRepository(db) {
     const validatedSong = validateSongInput(songInput);
     const payload = {
       title: validatedSong.title,
+      author: validatedSong.author,
       ccli_num: validatedSong.ccliNum,
       lyrics_json: JSON.stringify(
         Object.fromEntries(
@@ -323,6 +329,8 @@ function ensureSongsSchema(db) {
     if (!hasExpectedColumns) {
       db.exec("DROP TABLE IF EXISTS songaudit");
       db.exec("DROP TABLE IF EXISTS songs");
+    } else if (!columnNames.includes("author")) {
+      db.exec("ALTER TABLE songs ADD COLUMN author TEXT");
     }
   }
 
@@ -381,8 +389,8 @@ function initializeDatabase() {
 
   if (songCount === 0) {
     const insertSong = db.prepare(
-      `INSERT INTO songs (id, title, ccli_num, lyrics_json, section_order_json)
-       VALUES (@id, @title, @ccli_num, @lyrics_json, @section_order_json)`,
+      `INSERT INTO songs (id, title, author, ccli_num, lyrics_json, section_order_json)
+       VALUES (@id, @title, @author, @ccli_num, @lyrics_json, @section_order_json)`,
     );
     const insertAudit = db.prepare(
       `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay)
