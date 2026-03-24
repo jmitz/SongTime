@@ -1,0 +1,3 @@
+- Fix chord spacing where chords overlap.
+- Simplify edit dialog in Leader page
+- Float edit dialog in Leader page while editing.
