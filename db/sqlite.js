@@ -199,6 +199,13 @@ function createRepository(db) {
        initial = 1,
        updated_at = CURRENT_TIMESTAMP`,
   );
+  const setSongChordPlay = db.prepare(
+    `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay, updated_at)
+     VALUES (?, 'edit', 1, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(song_id) DO UPDATE SET
+       chordPlay = excluded.chordPlay,
+       updated_at = CURRENT_TIMESTAMP`,
+  );
 
   function refreshSongs() {
     sectionTypes = hydrateSectionTypes(db);
@@ -290,6 +297,25 @@ function createRepository(db) {
       }
 
       return persistSong(songInput, numericSongId);
+    },
+    setSongLocked(songId, locked) {
+      const numericSongId = Number(songId);
+      if (!Number.isInteger(numericSongId)) {
+        return null;
+      }
+
+      if (!songsById.has(numericSongId)) {
+        return null;
+      }
+
+      setSongChordPlay.run(numericSongId, locked ? 1 : 0);
+      const songRow = selectSongById.get(numericSongId);
+      if (!songRow) {
+        return null;
+      }
+
+      refreshSongs();
+      return mapSongRow(songRow);
     },
     deleteSong(songId) {
       const numericSongId = Number(songId);

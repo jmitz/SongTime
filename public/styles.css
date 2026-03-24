@@ -6,6 +6,9 @@
   --muted: #6d5a47;
   --accent: #b3572f;
   --accent-soft: #f0c7a6;
+  --song-status-needs-initial: #9c3d27;
+  --song-status-needs-chordplay: #2455b5;
+  --song-status-complete: #2a2118;
   --shadow: 0 20px 60px rgba(69, 45, 17, 0.14);
   --radius: 24px;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -564,6 +567,18 @@ textarea {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+
+.song-status-needs-initial {
+  color: var(--song-status-needs-initial);
+}
+
+.song-status-needs-chordplay {
+  color: var(--song-status-needs-chordplay);
+}
+
+.song-status-complete {
+  color: var(--song-status-complete);
 }
 
 .song-list-item.active {

@@ -112,6 +112,29 @@ app.put("/api/songs/:id", (req, res) => {
   handleSongMutation(req, res, (payload) => repository.updateSong(req.params.id, payload));
 });
 
+app.patch("/api/songs/:id/lock", (req, res) => {
+  try {
+    const song = repository.setSongLocked(req.params.id, Boolean(req.body?.locked));
+    if (!song) {
+      res.status(404).json({ error: "Song not found." });
+      return;
+    }
+
+    if (song.id === state.currentSongId) {
+      broadcastState();
+    }
+
+    broadcastSongs();
+
+    res.json({
+      song,
+      songs: repository.listSongSummaries(),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.delete("/api/songs/:id", (req, res) => {
   try {
     const deletedSong = repository.deleteSong(req.params.id);

@@ -18,6 +18,18 @@ let songs = [];
 let activeSongId = null;
 let activeSong = null;
 
+function getSongStatusTone(song) {
+  if (!song?.audit?.initial) {
+    return "song-status-needs-initial";
+  }
+
+  if (!song?.audit?.chordPlay) {
+    return "song-status-needs-chordplay";
+  }
+
+  return "song-status-complete";
+}
+
 function setStatus(message, isError = false) {
   saveStatus.textContent = message;
   saveStatus.classList.toggle("pill-error", isError);
@@ -149,6 +161,7 @@ function renderSongList() {
     button.type = "button";
     button.className = "song-list-item";
     button.textContent = song.title;
+    button.classList.add(getSongStatusTone(song));
     button.classList.toggle("active", song.id === activeSongId);
     button.addEventListener("click", () => {
       loadSong(song.id).catch((error) => {

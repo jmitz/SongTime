@@ -5,6 +5,7 @@ const songContent = document.getElementById("song-content");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
 const editModeToggle = document.getElementById("edit-mode-toggle");
+const songLockedToggle = document.getElementById("song-locked-toggle");
 const editStatus = document.getElementById("edit-status");
 const leaderEditActions = document.getElementById("leader-edit-actions");
 const newChordInput = document.getElementById("new-chord-input");
@@ -28,6 +29,39 @@ let dragState = null;
 let measuredCharacterWidth = null;
 let selectedChord = null;
 let insertMode = false;
+let isUpdatingLock = false;
+
+function getSongStatusColor(song) {
+  if (!song?.audit?.initial) {
+    return "#9c3d27";
+  }
+
+  if (!song?.audit?.chordPlay) {
+    return "#2455b5";
+  }
+
+  return "#2a2118";
+}
+
+function isSongLocked(song = currentSong) {
+  return Boolean(song?.audit?.chordPlay);
+}
+
+function syncSongSelectColor(songId = songSelect.value) {
+  const song = currentSong && String(currentSong.id) === String(songId) ? currentSong : null;
+  const selectedSong = song || Array.from(songSelect.options).find((option) => option.value === String(songId));
+  songSelect.style.color = selectedSong?.dataset?.color || getSongStatusColor(song);
+}
+
+function disableEditMode() {
+  if (!editModeToggle.checked) {
+    return;
+  }
+
+  editModeToggle.checked = false;
+  insertMode = false;
+  clearSelectedChord();
+}
 
 function resolveSection(song, section, sectionIndex = 0) {
   if (section) {
@@ -280,23 +314,36 @@ function isEditModeEnabled() {
 
 function updateEditControls() {
   const enabled = isEditModeEnabled();
+  const locked = isSongLocked();
+
+  editModeToggle.disabled = locked || isSaving || !currentSong;
+  songLockedToggle.disabled = enabled || isSaving || isUpdatingLock || !currentSong;
+  songLockedToggle.checked = locked;
   leaderEditActions.hidden = !enabled;
-  newChordInput.disabled = !enabled || isSaving;
-  insertChordButton.disabled = !enabled || isSaving;
-  deleteChordButton.disabled = !enabled || isSaving || !selectedChord;
-  saveChordsButton.disabled = !enabled || !draftDirty || isSaving;
-  resetChordsButton.disabled = !enabled || isSaving || !draftSectionLines;
+  newChordInput.disabled = !enabled || isSaving || locked;
+  insertChordButton.disabled = !enabled || isSaving || locked;
+  deleteChordButton.disabled = !enabled || isSaving || locked || !selectedChord;
+  saveChordsButton.disabled = !enabled || !draftDirty || isSaving || locked;
+  resetChordsButton.disabled = !enabled || isSaving || locked || !draftSectionLines;
   insertChordButton.classList.toggle("button-danger", insertMode);
   insertChordButton.classList.toggle("button-secondary", !insertMode);
 }
 
 function syncEditPanel() {
   const enabled = isEditModeEnabled();
+  const locked = isSongLocked();
+
+  if (enabled && locked) {
+    disableEditMode();
+    setEditStatus("Song locked");
+    updateEditControls();
+    return;
+  }
 
   if (!enabled) {
     insertMode = false;
     clearSelectedChord();
-    setEditStatus("Edit mode off");
+    setEditStatus(locked ? "Song locked" : "Edit mode off");
     updateEditControls();
     return;
   }
@@ -494,12 +541,16 @@ function renderSongOptions(songs) {
     const option = document.createElement("option");
     option.value = song.id;
     option.textContent = song.title;
+    option.style.color = getSongStatusColor(song);
+    option.dataset.color = option.style.color;
     songSelect.append(option);
   }
 
   if (previousSelection) {
     songSelect.value = String(previousSelection);
   }
+
+  syncSongSelectColor(songSelect.value);
 }
 
 function applyState(state) {
@@ -508,6 +559,10 @@ function applyState(state) {
 
   if (!state.currentSong) {
     return;
+  }
+
+  if (editModeToggle.checked && state.currentSong.audit?.chordPlay) {
+    disableEditMode();
   }
 
   const songChanged = currentSong?.id !== state.currentSong.id;
@@ -524,6 +579,7 @@ function applyState(state) {
 
   renderSong(state.currentSong, nextSection);
   songSelect.value = state.currentSongId;
+  syncSongSelectColor(state.currentSongId);
   if (!isEditModeEnabled()) {
     applyScroll(state.scrollRatio);
   }
@@ -789,7 +845,44 @@ async function saveChordChanges() {
   }
 }
 
+async function setSongLocked(locked) {
+  if (!currentSong) {
+    return;
+  }
+
+  isUpdatingLock = true;
+  updateEditControls();
+  setEditStatus(locked ? "Locking song..." : "Unlocking song...");
+
+  try {
+    const response = await fetch(`/api/songs/${currentSong.id}/lock`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ locked }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to update song lock.");
+    }
+
+    currentSong = data.song;
+    songLockedToggle.checked = isSongLocked(currentSong);
+    syncSongSelectColor(currentSong.id);
+    renderSong(currentSong, currentSection);
+  } catch (error) {
+    songLockedToggle.checked = isSongLocked(currentSong);
+    setEditStatus(error.message, true);
+  } finally {
+    isUpdatingLock = false;
+    updateEditControls();
+  }
+}
+
 songSelect.addEventListener("change", () => {
+  syncSongSelectColor(songSelect.value);
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
   }
@@ -798,6 +891,12 @@ songSelect.addEventListener("change", () => {
 });
 
 editModeToggle.addEventListener("change", () => {
+  if (isSongLocked()) {
+    disableEditMode();
+    syncEditPanel();
+    return;
+  }
+
   if (isEditModeEnabled()) {
     ensureDraftForCurrentSection();
     insertMode = false;
@@ -810,6 +909,15 @@ editModeToggle.addEventListener("change", () => {
   }
 
   syncEditPanel();
+});
+
+songLockedToggle.addEventListener("change", () => {
+  if (isEditModeEnabled()) {
+    songLockedToggle.checked = isSongLocked();
+    return;
+  }
+
+  setSongLocked(songLockedToggle.checked);
 });
 
 saveChordsButton.addEventListener("click", () => {
