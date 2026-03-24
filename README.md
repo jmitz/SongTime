@@ -30,6 +30,41 @@ Or with Docker Compose:
 docker compose up --build
 ```
 
+## Run With Windows Docker Desktop
+
+Use these Docker Desktop settings for this project:
+
+- Run Docker Desktop in `Linux containers` mode.
+- Enable `Use the WSL 2 based engine` in `Settings > General`.
+- In `Settings > Resources > WSL Integration`, enable integration for the distro where you work with this repo.
+- Make sure the repo is stored in a location Docker can access cleanly.
+- Make sure port `3000` is available on Windows.
+
+Recommended repo locations:
+
+- Best: inside your WSL filesystem, for example `/home/<you>/src/...`
+- Also works: under `C:\...`, as long as Docker Desktop has access to that drive/folder
+
+This project uses bind mounts from [compose.yaml](/home/jdmit/src/personal/SongList/compose.yaml), so Docker needs access to the repo files and the local `data/` folder.
+
+Start it with:
+
+```bash
+docker compose up --build
+```
+
+If `data/` does not exist yet, create it first:
+
+```bash
+mkdir data
+```
+
+Then open:
+
+- `http://localhost:3000/leader.html`
+- `http://localhost:3000/editor.html`
+- `http://localhost:3000/user.html`
+
 Both Docker Compose and the `docker run` example above mount the local `data/` folder into the container, so SQLite changes persist in [data/songlist.db](/home/jdmit/src/personal/SongList/data/songlist.db) on your machine.
 They also bind-mount the app files the container serves and executes, so local changes to `server.js`, `public/`, `db/`, `lib/`, and the packaged song documents are what the container uses at runtime.
 
