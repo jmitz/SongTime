@@ -1,7 +1,6 @@
 const songList = document.getElementById("song-list");
 const songSearch = document.getElementById("song-search");
 const newSongButton = document.getElementById("new-song-button");
-const addSectionButtons = document.querySelectorAll(".add-section-button");
 const saveStatus = document.getElementById("save-status");
 const editorTitle = document.getElementById("editor-title");
 const songForm = document.getElementById("song-form");
@@ -12,11 +11,15 @@ const songCcliInput = document.getElementById("song-ccli-input");
 const songInitialInput = document.getElementById("song-initial-input");
 const sectionOrderInput = document.getElementById("section-order-input");
 const sectionsContainer = document.getElementById("sections-container");
+const saveSongButton = document.getElementById("save-song-button");
 const deleteSongButton = document.getElementById("delete-song-button");
+const addSectionButton = document.getElementById("editor-add-section-button");
 
 let songs = [];
 let activeSongId = null;
 let activeSong = null;
+let dirtyTrackingSuspended = false;
+let hasPendingEdits = false;
 
 function getSongStatusTone(song) {
   if (!song?.audit?.initial) {
@@ -33,6 +36,26 @@ function getSongStatusTone(song) {
 function setStatus(message, isError = false) {
   saveStatus.textContent = message;
   saveStatus.classList.toggle("pill-error", isError);
+}
+
+function updateSaveButtonState() {
+  saveSongButton.disabled = !hasPendingEdits;
+}
+
+function resetDirtyState(status = "Ready") {
+  hasPendingEdits = false;
+  setStatus(status);
+  updateSaveButtonState();
+}
+
+function markPendingEdits() {
+  if (dirtyTrackingSuspended || hasPendingEdits) {
+    return;
+  }
+
+  hasPendingEdits = true;
+  setStatus("Pending edits");
+  updateSaveButtonState();
 }
 
 function createSectionRow(sectionId = "", content = "") {
@@ -59,6 +82,7 @@ function createSectionRow(sectionId = "", content = "") {
   removeButton.textContent = "Remove";
   removeButton.addEventListener("click", () => {
     row.remove();
+    markPendingEdits();
   });
 
   header.append(idLabel, removeButton);
@@ -96,6 +120,7 @@ function populateSections(sections) {
 }
 
 function setFormSong(song) {
+  dirtyTrackingSuspended = true;
   activeSong = song ?? null;
   activeSongId = song?.id ?? null;
   editorTitle.textContent = song?.title || "New song";
@@ -107,6 +132,8 @@ function setFormSong(song) {
   populateSections(song?.sections || { 1: { content: "" } });
   deleteSongButton.disabled = activeSongId == null;
   renderSongList();
+  dirtyTrackingSuspended = false;
+  resetDirtyState("Ready");
 }
 
 function getFormPayload() {
@@ -223,14 +250,13 @@ initialFilterInput.addEventListener("change", () => {
 
 newSongButton.addEventListener("click", () => {
   setFormSong(null);
-  setStatus("Ready for a new song");
+  resetDirtyState("Ready");
 });
 
-for (const addSectionButton of addSectionButtons) {
-  addSectionButton.addEventListener("click", () => {
-    sectionsContainer.append(createSectionRow("", ""));
-  });
-}
+addSectionButton.addEventListener("click", () => {
+  sectionsContainer.append(createSectionRow("", ""));
+  markPendingEdits();
+});
 
 deleteSongButton.addEventListener("click", async () => {
   if (activeSongId == null) {
@@ -261,7 +287,7 @@ deleteSongButton.addEventListener("click", async () => {
     setFormSong(null);
     await loadSongLibrary(data.currentSongId);
 
-    setStatus("Song deleted");
+    resetDirtyState("Ready");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -291,10 +317,14 @@ songForm.addEventListener("submit", async (event) => {
     setFormSong(data.song);
     await loadSongLibrary(data.song.id);
     setFormSong(data.song);
-    setStatus(isEditing ? "Song updated" : "Song created");
+    resetDirtyState("Saved");
   } catch (error) {
     setStatus(error.message, true);
   }
+});
+
+songForm.addEventListener("input", () => {
+  markPendingEdits();
 });
 
 async function init() {

@@ -33,8 +33,16 @@
             <h2 id="editor-title">New song</h2>
             <p class="section-label">Save changes to update the shared song library.</p>
           </div>
-          <div id="save-status" class="pill">Loading songs...</div>
         </header>
+
+        <aside id="editor-control-panel" class="editor-control-panel">
+          <div id="save-status" class="pill">Loading songs...</div>
+          <div class="editor-control-actions">
+            <button id="save-song-button" class="button" type="submit" form="song-form">Save song</button>
+            <button id="delete-song-button" class="button button-danger" type="button">Delete song</button>
+            <button id="editor-add-section-button" class="button button-secondary" type="button">Add section</button>
+          </div>
+        </aside>
 
         <form id="song-form" class="editor-form">
           <label class="field">
@@ -74,18 +82,9 @@
                 <h3>Sections</h3>
                 <p class="muted">Add each unique section here, then reference those IDs in section order.</p>
               </div>
-              <button class="button button-secondary add-section-button" type="button">Add section</button>
             </div>
             <div id="sections-container" class="sections-container"></div>
-            <div class="editor-sections-footer">
-              <button class="button button-secondary add-section-button" type="button">Add section</button>
-            </div>
           </section>
-
-          <div class="editor-actions">
-            <button class="button" type="submit">Save song</button>
-            <button id="delete-song-button" class="button button-danger" type="button">Delete song</button>
-          </div>
         </form>
       </main>
     </div>
