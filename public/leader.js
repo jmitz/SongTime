@@ -4,6 +4,7 @@ const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
+const editModeToggleLabel = document.getElementById("edit-mode-toggle-label");
 const editModeToggle = document.getElementById("edit-mode-toggle");
 const songLockedToggle = document.getElementById("song-locked-toggle");
 const leaderEditPanel = document.getElementById("leader-edit-panel");
@@ -317,6 +318,7 @@ function updateEditControls() {
   const enabled = isEditModeEnabled();
   const locked = isSongLocked();
 
+  editModeToggleLabel.hidden = locked;
   editModeToggle.disabled = locked || isSaving || !currentSong;
   songLockedToggle.disabled = enabled || isSaving || isUpdatingLock || !currentSong;
   songLockedToggle.checked = locked;

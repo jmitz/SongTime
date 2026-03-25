@@ -286,6 +286,10 @@ textarea {
   font-weight: 600;
 }
 
+.toggle[hidden] {
+  display: none;
+}
+
 .toggle input {
   width: 16px;
   height: 16px;
