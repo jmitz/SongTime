@@ -50,6 +50,30 @@ function hydrateSongs(db) {
     }));
 }
 
+function hydrateSetlist(db) {
+  return db
+    .prepare(
+      `SELECT setlist_entries.song_id, setlist_entries.position, songs.title, songs.authors,
+              COALESCE(songaudit.initial, 0) AS initial,
+              COALESCE(songaudit.chordPlay, 0) AS chordPlay
+       FROM setlist_entries
+       INNER JOIN songs ON songs.id = setlist_entries.song_id
+       LEFT JOIN songaudit ON songaudit.song_id = songs.id
+       ORDER BY setlist_entries.position ASC, setlist_entries.id ASC`,
+    )
+    .all()
+    .map((row) => ({
+      songId: row.song_id,
+      position: row.position,
+      title: row.title,
+      authors: row.authors,
+      audit: {
+        initial: Boolean(row.initial),
+        chordPlay: Boolean(row.chordPlay),
+      },
+    }));
+}
+
 function mapSongRow(song) {
   return {
     id: song.id,
@@ -161,6 +185,7 @@ function validateSongInput(input) {
 function createRepository(db) {
   const songs = [];
   const songsById = new Map();
+  let setlist = [];
   let sectionTypes = hydrateSectionTypes(db);
 
   const insertSong = db.prepare(
@@ -186,6 +211,11 @@ function createRepository(db) {
      WHERE songs.id = ?`,
   );
   const deleteSong = db.prepare("DELETE FROM songs WHERE id = ?");
+  const deleteSetlistEntries = db.prepare("DELETE FROM setlist_entries");
+  const insertSetlistEntry = db.prepare(
+    `INSERT INTO setlist_entries (song_id, position)
+     VALUES (@song_id, @position)`,
+  );
   const ensureSongAudit = db.prepare(
     `INSERT INTO songaudit (song_id, audit_type, initial, chordPlay)
      VALUES (?, 'check', 0, 0)
@@ -216,6 +246,13 @@ function createRepository(db) {
       songs.push(song);
       songsById.set(song.id, song);
     }
+
+    setlist = hydrateSetlist(db)
+      .filter((entry) => songsById.has(entry.songId))
+      .map((entry, index) => ({
+        ...entry,
+        position: index,
+      }));
   }
 
   function persistSong(songInput, songId = null) {
@@ -259,12 +296,26 @@ function createRepository(db) {
 
   refreshSongs();
 
+  const replaceSetlist = db.transaction((songIds) => {
+    deleteSetlistEntries.run();
+
+    songIds.forEach((songId, index) => {
+      insertSetlistEntry.run({
+        song_id: songId,
+        position: index,
+      });
+    });
+  });
+
   return {
     get songs() {
       return songs;
     },
     get sectionTypes() {
       return sectionTypes;
+    },
+    listSetlist() {
+      return setlist.map((entry) => ({ ...entry }));
     },
     listSongSummaries({ initial = null } = {}) {
       return songs
@@ -286,6 +337,39 @@ function createRepository(db) {
       }
 
       return songsById.get(numericSongId) || null;
+    },
+    saveSetlist(songIds) {
+      if (!Array.isArray(songIds)) {
+        throw new Error("Set list songIds must be an array.");
+      }
+
+      const normalizedSongIds = songIds.map((songId) => Number(songId));
+      const uniqueSongIds = new Set();
+
+      normalizedSongIds.forEach((songId) => {
+        if (!Number.isInteger(songId)) {
+          throw new Error("Set list contains an invalid song.");
+        }
+
+        if (uniqueSongIds.has(songId)) {
+          throw new Error("Set list cannot contain the same song more than once.");
+        }
+
+        const song = songsById.get(songId);
+        if (!song) {
+          throw new Error("Set list contains a song that does not exist.");
+        }
+
+        if (!song.audit?.initial) {
+          throw new Error(`"${song.title}" must have the initial edit checked before it can be added.`);
+        }
+
+        uniqueSongIds.add(songId);
+      });
+
+      replaceSetlist(normalizedSongIds);
+      refreshSongs();
+      return this.listSetlist();
     },
     createSong(songInput) {
       return persistSong(songInput);
@@ -419,6 +503,24 @@ function ensureSongsSchema(db) {
       }
     } else if (!hasExpectedColumns) {
       db.exec("DROP TABLE IF EXISTS songaudit");
+    }
+  }
+
+  const setlistEntriesTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'setlist_entries'")
+    .get();
+
+  if (setlistEntriesTable) {
+    const columns = db.prepare("PRAGMA table_info(setlist_entries)").all();
+    const columnNames = columns.map((column) => column.name);
+    const hasExpectedColumns =
+      columnNames.includes("song_id") &&
+      columnNames.includes("position") &&
+      columnNames.includes("created_at") &&
+      columnNames.includes("updated_at");
+
+    if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS setlist_entries");
     }
   }
 

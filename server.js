@@ -47,6 +47,7 @@ function serializeState() {
     scrollRatio: state.scrollRatio,
     currentSong,
     currentSection: getCurrentSection(currentSong),
+    setList: repository.listSetlist(),
     leaderCount: state.leaderCount,
     userCount: state.userCount,
   };
@@ -75,6 +76,13 @@ app.get("/api/songs/:id", (req, res) => {
   });
 });
 
+app.get("/api/setlist", (_req, res) => {
+  res.json({
+    setList: repository.listSetlist(),
+    eligibleSongs: repository.listSongSummaries({ initial: true }),
+  });
+});
+
 app.get("/api/section-types", (_req, res) => {
   res.json({ sectionTypes: repository.sectionTypes });
 });
@@ -94,6 +102,7 @@ function handleSongMutation(req, res, saveSong) {
     }
 
     broadcastSongs();
+    broadcastSetlist();
 
     res.json({
       song,
@@ -125,10 +134,25 @@ app.patch("/api/songs/:id/lock", (req, res) => {
     }
 
     broadcastSongs();
+    broadcastSetlist();
 
     res.json({
       song,
       songs: repository.listSongSummaries(),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put("/api/setlist", (req, res) => {
+  try {
+    const setList = repository.saveSetlist(req.body?.songIds || []);
+    broadcastSetlist();
+    broadcastState();
+    res.json({
+      setList,
+      eligibleSongs: repository.listSongSummaries({ initial: true }),
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -152,6 +176,7 @@ app.delete("/api/songs/:id", (req, res) => {
     }
 
     broadcastSongs();
+    broadcastSetlist();
 
     res.json({
       deletedSongId: deletedSong.id,
@@ -192,6 +217,16 @@ function broadcastSongs() {
     type: "songs",
     payload: {
       songs: repository.listSongSummaries(),
+    },
+  });
+}
+
+function broadcastSetlist() {
+  broadcast({
+    type: "setlist",
+    payload: {
+      setList: repository.listSetlist(),
+      eligibleSongs: repository.listSongSummaries({ initial: true }),
     },
   });
 }

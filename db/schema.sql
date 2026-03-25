@@ -30,6 +30,18 @@ CREATE TABLE IF NOT EXISTS songaudit (
 CREATE INDEX IF NOT EXISTS idx_songaudit_initial_song_id
 ON songaudit (initial, song_id);
 
+CREATE TABLE IF NOT EXISTS setlist_entries (
+  id INTEGER PRIMARY KEY,
+  song_id INTEGER NOT NULL UNIQUE,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_setlist_entries_position
+ON setlist_entries (position, song_id);
+
 INSERT INTO section_types (code, desc) VALUES
   ('V', 'Verse'),
   ('C', 'Chorus'),

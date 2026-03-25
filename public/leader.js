@@ -3,6 +3,13 @@ const songTitle = document.getElementById("song-title");
 const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
+const setlistSongSelect = document.getElementById("setlist-song-select");
+const setlistAddButton = document.getElementById("setlist-add-button");
+const setlistGenerateButton = document.getElementById("setlist-generate-button");
+const setlistClearButton = document.getElementById("setlist-clear-button");
+const setlistPerformingToggle = document.getElementById("setlist-performing-toggle");
+const setlistStatus = document.getElementById("setlist-status");
+const setlistList = document.getElementById("setlist-list");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
 const editModeToggleLabel = document.getElementById("edit-mode-toggle-label");
@@ -33,6 +40,12 @@ let measuredCharacterWidth = null;
 let selectedChord = null;
 let insertMode = false;
 let isUpdatingLock = false;
+let setList = [];
+let eligibleSetlistSongs = [];
+let isSavingSetlist = false;
+let draggedSetlistSongId = null;
+let suppressSetlistClickSongId = null;
+const PERFORMING_STORAGE_KEY = "songlist-performing-mode";
 
 function getSongStatusColor(song) {
   if (!song?.audit?.initial) {
@@ -48,6 +61,64 @@ function getSongStatusColor(song) {
 
 function isSongLocked(song = currentSong) {
   return Boolean(song?.audit?.chordPlay);
+}
+
+function setSetlistStatus(message, isError = false) {
+  setlistStatus.textContent = message;
+  setlistStatus.classList.toggle("pill-error", isError);
+}
+
+function getActiveSetlistIndex(songId = currentSong?.id) {
+  return setList.findIndex((entry) => entry.songId === songId);
+}
+
+function updateSetlistControls() {
+  const hasEligibleSongs = eligibleSetlistSongs.length > 0;
+  const selectedSongId = Number(setlistSongSelect.value);
+  const alreadyIncluded = setList.some((entry) => entry.songId === selectedSongId);
+
+  setlistSongSelect.disabled = isSavingSetlist || !hasEligibleSongs;
+  setlistAddButton.disabled =
+    isSavingSetlist || !hasEligibleSongs || !Number.isInteger(selectedSongId) || alreadyIncluded;
+  setlistGenerateButton.disabled = isSavingSetlist || !hasEligibleSongs;
+  setlistClearButton.disabled = isSavingSetlist || setList.length === 0;
+}
+
+function isPerformingMode() {
+  return setlistPerformingToggle.checked;
+}
+
+function applyPerformingMode() {
+  document.body.classList.toggle("performing-mode", isPerformingMode());
+}
+
+function getNextSetlistSongId(currentSongId = currentSong?.id) {
+  const activeIndex = getActiveSetlistIndex(currentSongId);
+  if (activeIndex < 0 || activeIndex >= setList.length - 1) {
+    return null;
+  }
+
+  return setList[activeIndex + 1]?.songId ?? null;
+}
+
+function getPreviousSetlistSongId(currentSongId = currentSong?.id) {
+  const activeIndex = getActiveSetlistIndex(currentSongId);
+  if (activeIndex <= 0) {
+    return null;
+  }
+
+  return setList[activeIndex - 1]?.songId ?? null;
+}
+
+function goLiveToSong(songId) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const normalizedSongId = String(songId);
+  songSelect.value = normalizedSongId;
+  syncSongSelectColor(normalizedSongId);
+  socket.send(JSON.stringify({ type: "set-song", songId: normalizedSongId }));
 }
 
 function syncSongSelectColor(songId = songSelect.value) {
@@ -596,9 +667,210 @@ function renderSongOptions(songs) {
   syncSongSelectColor(songSelect.value);
 }
 
+function renderSetlistSongOptions() {
+  const previousSelection = setlistSongSelect.value;
+  setlistSongSelect.innerHTML = "";
+
+  if (eligibleSetlistSongs.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No checked songs available";
+    setlistSongSelect.append(option);
+    updateSetlistControls();
+    return;
+  }
+
+  eligibleSetlistSongs.forEach((song) => {
+    const option = document.createElement("option");
+    option.value = String(song.id);
+    option.textContent = song.title;
+    setlistSongSelect.append(option);
+  });
+
+  if (previousSelection && eligibleSetlistSongs.some((song) => String(song.id) === previousSelection)) {
+    setlistSongSelect.value = previousSelection;
+  }
+
+  updateSetlistControls();
+}
+
+function renderSetlist() {
+  setlistList.innerHTML = "";
+  const activeIndex = getActiveSetlistIndex();
+
+  if (setList.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "muted";
+    emptyState.textContent = "Generate or build a set list to keep a leader-ready order.";
+    setlistList.append(emptyState);
+    updateSetlistControls();
+    return;
+  }
+
+  setList.forEach((entry, index) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "setlist-pill";
+    item.draggable = !isSavingSetlist;
+    item.dataset.songId = String(entry.songId);
+    item.textContent = entry.title;
+    if (index === activeIndex) {
+      item.classList.add("setlist-pill-active");
+    }
+
+    item.addEventListener("click", () => {
+      if (suppressSetlistClickSongId === entry.songId) {
+        suppressSetlistClickSongId = null;
+        return;
+      }
+
+      goLiveToSong(entry.songId);
+    });
+    item.addEventListener("dragstart", (event) => {
+      if (isSavingSetlist) {
+        event.preventDefault();
+        return;
+      }
+
+      draggedSetlistSongId = entry.songId;
+      suppressSetlistClickSongId = entry.songId;
+      item.classList.add("setlist-pill-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(entry.songId));
+    });
+    item.addEventListener("dragend", () => {
+      draggedSetlistSongId = null;
+      item.classList.remove("setlist-pill-dragging");
+      clearSetlistDropTargets();
+      window.setTimeout(() => {
+        suppressSetlistClickSongId = null;
+      }, 0);
+    });
+    item.addEventListener("dragover", (event) => {
+      if (!canDropOnSetlistSong(entry.songId)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      clearSetlistDropTargets();
+      item.classList.add("setlist-pill-drop-target");
+    });
+    item.addEventListener("dragleave", () => {
+      item.classList.remove("setlist-pill-drop-target");
+    });
+    item.addEventListener("drop", (event) => {
+      if (!canDropOnSetlistSong(entry.songId)) {
+        return;
+      }
+
+      event.preventDefault();
+      item.classList.remove("setlist-pill-drop-target");
+      moveSetlistSongBySongId(draggedSetlistSongId, entry.songId);
+    });
+
+    setlistList.append(item);
+  });
+
+  updateSetlistControls();
+}
+
+function applySetlistPayload(payload) {
+  setList = Array.isArray(payload?.setList) ? payload.setList : [];
+  eligibleSetlistSongs = Array.isArray(payload?.eligibleSongs) ? payload.eligibleSongs : eligibleSetlistSongs;
+  renderSetlistSongOptions();
+  renderSetlist();
+
+  if (!isSavingSetlist) {
+    setSetlistStatus(setList.length > 0 ? "Set list ready" : "Set list is empty");
+  }
+}
+
+async function saveSetlist(songIds, statusMessage = "Saving set list...") {
+  isSavingSetlist = true;
+  setSetlistStatus(statusMessage);
+  updateSetlistControls();
+  renderSetlist();
+
+  try {
+    const response = await fetch("/api/setlist", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ songIds }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to save set list.");
+    }
+
+    applySetlistPayload(data);
+    setSetlistStatus(songIds.length > 0 ? "Set list saved" : "Set list cleared");
+  } catch (error) {
+    setSetlistStatus(error.message, true);
+  } finally {
+    isSavingSetlist = false;
+    updateSetlistControls();
+    renderSetlist();
+  }
+}
+
+function addSelectedSongToSetlist() {
+  const songId = Number(setlistSongSelect.value);
+  if (!Number.isInteger(songId) || setList.some((entry) => entry.songId === songId)) {
+    updateSetlistControls();
+    return;
+  }
+
+  saveSetlist([...setList.map((entry) => entry.songId), songId], "Adding song...");
+}
+
+function generateSetlistFromCheckedSongs() {
+  saveSetlist(
+    eligibleSetlistSongs.map((song) => song.id),
+    "Generating set list...",
+  );
+}
+
+function moveSetlistSong(fromIndex, toIndex) {
+  if (toIndex < 0 || toIndex >= setList.length || fromIndex === toIndex) {
+    return;
+  }
+
+  const nextSongIds = setList.map((entry) => entry.songId);
+  const [movedSongId] = nextSongIds.splice(fromIndex, 1);
+  nextSongIds.splice(toIndex, 0, movedSongId);
+  saveSetlist(nextSongIds, "Updating set list...");
+}
+
+function clearSetlistDropTargets() {
+  setlistList.querySelectorAll(".setlist-pill-drop-target").forEach((pill) => {
+    pill.classList.remove("setlist-pill-drop-target");
+  });
+}
+
+function canDropOnSetlistSong(targetSongId) {
+  return Number.isInteger(draggedSetlistSongId) && draggedSetlistSongId !== targetSongId && !isSavingSetlist;
+}
+
+function moveSetlistSongBySongId(sourceSongId, targetSongId) {
+  const fromIndex = setList.findIndex((entry) => entry.songId === sourceSongId);
+  const toIndex = setList.findIndex((entry) => entry.songId === targetSongId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+    return;
+  }
+
+  moveSetlistSong(fromIndex, toIndex);
+}
+
 function applyState(state) {
   leaderCount.textContent = String(state.leaderCount);
   userCount.textContent = String(state.userCount);
+  if (Array.isArray(state.setList)) {
+    setList = state.setList;
+    renderSetlist();
+  }
 
   if (!state.currentSong) {
     return;
@@ -659,6 +931,10 @@ function connect() {
 
     if (message.type === "songs") {
       renderSongOptions(message.payload.songs);
+    }
+
+    if (message.type === "setlist") {
+      applySetlistPayload(message.payload);
     }
   });
 
@@ -933,6 +1209,29 @@ songSelect.addEventListener("change", () => {
   socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
 });
 
+setlistSongSelect.addEventListener("change", () => {
+  updateSetlistControls();
+});
+
+setlistAddButton.addEventListener("click", () => {
+  addSelectedSongToSetlist();
+});
+
+setlistGenerateButton.addEventListener("click", () => {
+  generateSetlistFromCheckedSongs();
+});
+
+setlistClearButton.addEventListener("click", () => {
+  saveSetlist([], "Clearing set list...");
+});
+
+setlistPerformingToggle.checked = window.localStorage.getItem(PERFORMING_STORAGE_KEY) === "true";
+applyPerformingMode();
+setlistPerformingToggle.addEventListener("change", () => {
+  window.localStorage.setItem(PERFORMING_STORAGE_KEY, String(setlistPerformingToggle.checked));
+  applyPerformingMode();
+});
+
 editModeToggle.addEventListener("change", () => {
   if (isSongLocked()) {
     disableEditMode();
@@ -1035,12 +1334,33 @@ window.addEventListener("keydown", (event) => {
 
   if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
     event.preventDefault();
+
+    if (isPerformingMode() && currentSong?.sectionOrder?.length) {
+      const maxIndex = Math.max(0, currentSong.sectionOrder.length - 1);
+      if (currentSectionIndex >= maxIndex) {
+        const nextSetlistSongId = getNextSetlistSongId();
+        if (nextSetlistSongId != null) {
+          goLiveToSong(nextSetlistSongId);
+          return;
+        }
+      }
+    }
+
     socket.send(JSON.stringify({ type: "next-section" }));
     return;
   }
 
   if (event.key === "ArrowLeft") {
     event.preventDefault();
+
+    if (isPerformingMode() && currentSectionIndex <= 0) {
+      const previousSetlistSongId = getPreviousSetlistSongId();
+      if (previousSetlistSongId != null) {
+        goLiveToSong(previousSetlistSongId);
+        return;
+      }
+    }
+
     socket.send(JSON.stringify({ type: "previous-section" }));
     return;
   }
@@ -1088,13 +1408,23 @@ songContent.addEventListener("click", (event) => {
 });
 
 async function init() {
-  const response = await fetch("/api/songs");
-  if (!response.ok) {
+  const [songsResponse, setlistResponse] = await Promise.all([
+    fetch("/api/songs"),
+    fetch("/api/setlist"),
+  ]);
+
+  if (!songsResponse.ok) {
     throw new Error("Unable to load songs.");
   }
 
-  const data = await response.json();
-  renderSongOptions(data.songs);
+  if (!setlistResponse.ok) {
+    throw new Error("Unable to load set list.");
+  }
+
+  const songsData = await songsResponse.json();
+  const setlistData = await setlistResponse.json();
+  renderSongOptions(songsData.songs);
+  applySetlistPayload(setlistData);
   syncEditPanel();
   connect();
 }
