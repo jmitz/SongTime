@@ -6,6 +6,7 @@ const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
 const editModeToggle = document.getElementById("edit-mode-toggle");
 const songLockedToggle = document.getElementById("song-locked-toggle");
+const leaderEditPanel = document.getElementById("leader-edit-panel");
 const editStatus = document.getElementById("edit-status");
 const leaderEditActions = document.getElementById("leader-edit-actions");
 const newChordInput = document.getElementById("new-chord-input");
@@ -319,6 +320,7 @@ function updateEditControls() {
   editModeToggle.disabled = locked || isSaving || !currentSong;
   songLockedToggle.disabled = enabled || isSaving || isUpdatingLock || !currentSong;
   songLockedToggle.checked = locked;
+  leaderEditPanel.hidden = !enabled;
   leaderEditActions.hidden = !enabled;
   newChordInput.disabled = !enabled || isSaving || locked;
   insertChordButton.disabled = !enabled || isSaving || locked;

@@ -30,21 +30,6 @@
           <input id="song-locked-toggle" type="checkbox" />
           <span>Song Locked</span>
         </label>
-        <div id="edit-status" class="pill">Edit mode off</div>
-        <div id="leader-edit-actions" class="leader-edit-actions" hidden>
-          <p class="muted">Drag chords in the song display, insert new ones, or select a chord to delete it.</p>
-          <label class="field">
-            <span>New chord</span>
-            <input id="new-chord-input" type="text" placeholder="C, Am, F/G" />
-          </label>
-          <div class="editor-actions">
-            <button id="insert-chord-button" class="button button-secondary" type="button">Insert chord</button>
-            <button id="delete-chord-button" class="button button-secondary" type="button">Delete selected</button>
-            <button id="save-chords-button" class="button" type="button">Save chord changes</button>
-            <button id="reset-chords-button" class="button button-secondary" type="button">Reset draft</button>
-          </div>
-        </div>
-        <a class="text-link" href="/editor.html">Open the song editor</a>
         <a class="text-link" href="/user.html">Open the user view</a>
       </aside>
       <main class="song-stage">
@@ -56,6 +41,23 @@
           </div>
           <div class="pill">Space/Right: next section, Left: previous</div>
         </header>
+        <aside id="leader-edit-panel" class="leader-edit-panel" hidden>
+          <div id="edit-status" class="pill">Edit mode off</div>
+          <div id="leader-edit-actions" class="leader-edit-actions" hidden>
+            <p class="muted">Drag chords in the song display, insert new ones, or select a chord to delete it.</p>
+            <label class="field">
+              <span>New chord</span>
+              <input id="new-chord-input" type="text" placeholder="C, Am, F/G" />
+            </label>
+            <div class="editor-actions">
+              <button id="insert-chord-button" class="button button-secondary" type="button">Insert chord</button>
+              <button id="delete-chord-button" class="button button-secondary" type="button">Delete selected</button>
+              <button id="save-chords-button" class="button" type="button">Save chord changes</button>
+              <button id="reset-chords-button" class="button button-secondary" type="button">Reset draft</button>
+            </div>
+          </div>
+          <a class="text-link" href="/editor.html">Open the song editor</a>
+        </aside>
         <section id="song-content" class="song-content leader-content"></section>
       </main>
     </div>

@@ -231,6 +231,7 @@ textarea {
 }
 
 .song-stage {
+  position: relative;
   min-height: calc(100vh - 40px);
   padding: 28px;
 }
@@ -311,6 +312,29 @@ textarea {
   display: grid;
   gap: 18px;
   align-content: start;
+}
+
+.leader-edit-panel {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 20;
+  display: grid;
+  gap: 18px;
+  width: min(360px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(76, 54, 31, 0.12);
+  background: rgba(255, 252, 246, 0.96);
+  box-shadow: 0 18px 42px rgba(69, 45, 17, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.leader-edit-panel[hidden],
+.leader-edit-actions[hidden] {
+  display: none;
 }
 
 .leader-live-section {
@@ -612,6 +636,13 @@ textarea {
 
   .song-content {
     min-height: 60vh;
+  }
+
+  .leader-edit-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin: 0 0 20px;
   }
 
   .editor-shell {
