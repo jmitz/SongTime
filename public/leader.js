@@ -3,11 +3,14 @@ const songTitle = document.getElementById("song-title");
 const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
+const openSetlistButton = document.getElementById("open-setlist-button");
+const setlistPanel = document.getElementById("setlist-panel");
 const setlistSongSelect = document.getElementById("setlist-song-select");
 const setlistAddButton = document.getElementById("setlist-add-button");
 const setlistGenerateButton = document.getElementById("setlist-generate-button");
 const setlistClearButton = document.getElementById("setlist-clear-button");
 const setlistPerformingToggle = document.getElementById("setlist-performing-toggle");
+const setlistClosePerformingButton = document.getElementById("setlist-close-performing-button");
 const setlistStatus = document.getElementById("setlist-status");
 const setlistList = document.getElementById("setlist-list");
 const leaderCount = document.getElementById("leader-count");
@@ -45,6 +48,7 @@ let eligibleSetlistSongs = [];
 let isSavingSetlist = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
+let isSetlistPanelOpen = true;
 const PERFORMING_STORAGE_KEY = "songlist-performing-mode";
 
 function getSongStatusColor(song) {
@@ -88,8 +92,33 @@ function isPerformingMode() {
   return setlistPerformingToggle.checked;
 }
 
+function applySetlistPanelVisibility() {
+  const shouldShowPanel = isSetlistPanelOpen || isPerformingMode();
+  setlistPanel.hidden = !shouldShowPanel;
+  openSetlistButton.hidden = shouldShowPanel;
+}
+
 function applyPerformingMode() {
   document.body.classList.toggle("performing-mode", isPerformingMode());
+  setlistClosePerformingButton.setAttribute(
+    "aria-label",
+    isPerformingMode() ? "Stop performing" : "Close set list dialog",
+  );
+  applySetlistPanelVisibility();
+}
+
+function openSetlistPanel() {
+  isSetlistPanelOpen = true;
+  applySetlistPanelVisibility();
+}
+
+function closeSetlistPanel() {
+  if (isPerformingMode()) {
+    return;
+  }
+
+  isSetlistPanelOpen = false;
+  applySetlistPanelVisibility();
 }
 
 function getNextSetlistSongId(currentSongId = currentSong?.id) {
@@ -697,17 +726,22 @@ function renderSetlistSongOptions() {
 function renderSetlist() {
   setlistList.innerHTML = "";
   const activeIndex = getActiveSetlistIndex();
+  const visibleEntries = setList.filter((entry, index) => !isPerformingMode() || activeIndex < 0 || index >= activeIndex);
 
-  if (setList.length === 0) {
+  if (visibleEntries.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "muted";
-    emptyState.textContent = "Generate or build a set list to keep a leader-ready order.";
+    emptyState.textContent =
+      setList.length === 0
+        ? "Generate or build a set list to keep a leader-ready order."
+        : "All songs in this set have been completed.";
     setlistList.append(emptyState);
     updateSetlistControls();
     return;
   }
 
-  setList.forEach((entry, index) => {
+  visibleEntries.forEach((entry) => {
+    const index = setList.findIndex((setListEntry) => setListEntry.songId === entry.songId);
     const item = document.createElement("button");
     item.type = "button";
     item.className = "setlist-pill";
@@ -862,6 +896,18 @@ function moveSetlistSongBySongId(sourceSongId, targetSongId) {
   }
 
   moveSetlistSong(fromIndex, toIndex);
+}
+
+function stopPerformingMode() {
+  setlistPerformingToggle.checked = false;
+  window.localStorage.setItem(PERFORMING_STORAGE_KEY, "false");
+  isSetlistPanelOpen = true;
+  applyPerformingMode();
+}
+
+async function finishPerformanceSet() {
+  stopPerformingMode();
+  await saveSetlist([], "Clearing completed set...");
 }
 
 function applyState(state) {
@@ -1229,7 +1275,21 @@ setlistPerformingToggle.checked = window.localStorage.getItem(PERFORMING_STORAGE
 applyPerformingMode();
 setlistPerformingToggle.addEventListener("change", () => {
   window.localStorage.setItem(PERFORMING_STORAGE_KEY, String(setlistPerformingToggle.checked));
+  if (setlistPerformingToggle.checked) {
+    isSetlistPanelOpen = true;
+  }
   applyPerformingMode();
+});
+setlistClosePerformingButton.addEventListener("click", () => {
+  if (isPerformingMode()) {
+    stopPerformingMode();
+    return;
+  }
+
+  closeSetlistPanel();
+});
+openSetlistButton.addEventListener("click", () => {
+  openSetlistPanel();
 });
 
 editModeToggle.addEventListener("change", () => {
@@ -1343,6 +1403,11 @@ window.addEventListener("keydown", (event) => {
           goLiveToSong(nextSetlistSongId);
           return;
         }
+
+        finishPerformanceSet().catch((error) => {
+          setSetlistStatus(error.message, true);
+        });
+        return;
       }
     }
 

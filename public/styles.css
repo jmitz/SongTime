@@ -198,7 +198,7 @@ textarea {
   z-index: 18;
   display: grid;
   gap: 14px;
-  width: min(360px, calc(100vw - 40px));
+  width: min(320px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   overflow: auto;
   padding: 16px;
@@ -209,9 +209,35 @@ textarea {
   backdrop-filter: blur(12px);
 }
 
+.setlist-panel-header,
+.setlist-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.setlist-panel-header {
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.setlist-close-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(76, 54, 31, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 248, 239, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 body.performing-mode .setlist-panel {
   left: 20px;
   right: auto;
+}
+
+body.performing-mode .setlist-controls {
+  display: none;
 }
 
 .setlist-actions {
@@ -224,6 +250,11 @@ body.performing-mode .setlist-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+body.performing-mode .setlist-list {
+  display: grid;
+  grid-template-columns: 1fr;
 }
 
 .setlist-pill {
@@ -240,6 +271,11 @@ body.performing-mode .setlist-panel {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+body.performing-mode .setlist-pill {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .setlist-pill:hover {
@@ -273,6 +309,14 @@ body.performing-mode .setlist-panel {
 
 .text-link {
   font-weight: 600;
+}
+
+.pill-button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
 }
 
 .button {

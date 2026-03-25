@@ -30,6 +30,7 @@
           <input id="song-locked-toggle" type="checkbox" />
           <span>Song Locked</span>
         </label>
+        <button id="open-setlist-button" class="pill pill-button" type="button">Build set list</button>
         <a class="text-link" href="/user.html">Open the user view</a>
       </aside>
       <main class="song-stage">
@@ -59,25 +60,36 @@
           </div>
           <a class="text-link" href="/editor.html">Open the song editor</a>
         </aside>
-        <aside class="setlist-panel">
-          <div>
-            <p class="eyebrow">Set List</p>
-            <p class="muted">Click a title to jump live. Drag a title pill to change the order.</p>
+        <aside id="setlist-panel" class="setlist-panel">
+          <div class="setlist-panel-header">
+            <div>
+              <p class="eyebrow">Set List</p>
+            </div>
+            <button
+              id="setlist-close-performing-button"
+              class="setlist-close-button"
+              type="button"
+              aria-label="Close set list dialog"
+            >
+              X
+            </button>
           </div>
-          <label class="toggle">
-            <input id="setlist-performing-toggle" type="checkbox" />
-            <span>Performing</span>
-          </label>
-          <label class="field">
-            <span>Add checked song</span>
-            <select id="setlist-song-select"></select>
-          </label>
-          <div class="setlist-actions">
-            <button id="setlist-add-button" class="button button-secondary" type="button">Add</button>
-            <button id="setlist-generate-button" class="button button-secondary" type="button">Generate</button>
-            <button id="setlist-clear-button" class="button button-ghost" type="button">Clear</button>
+          <div id="setlist-controls" class="setlist-controls">
+            <label class="toggle">
+              <input id="setlist-performing-toggle" type="checkbox" />
+              <span>Performing</span>
+            </label>
+            <label class="field">
+              <span>Add checked song</span>
+              <select id="setlist-song-select"></select>
+            </label>
+            <div class="setlist-actions">
+              <button id="setlist-add-button" class="button button-secondary" type="button">Add</button>
+              <button id="setlist-generate-button" class="button button-secondary" type="button">Generate</button>
+              <button id="setlist-clear-button" class="button button-ghost" type="button">Clear</button>
+            </div>
+            <div id="setlist-status" class="pill">Loading set list...</div>
           </div>
-          <div id="setlist-status" class="pill">Loading set list...</div>
           <div id="setlist-list" class="setlist-list" aria-live="polite"></div>
         </aside>
         <section id="song-content" class="song-content leader-content"></section>
