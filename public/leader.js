@@ -302,6 +302,29 @@ function findChordIndex(lineIndex, chordOrder) {
   return draftSectionLines?.[lineIndex]?.chords.findIndex((chord) => chord.order === chordOrder) ?? -1;
 }
 
+function getRenderedChords(line) {
+  const visibleLyricsLength = (line?.lyrics || "").replace(/\s+$/u, "").length;
+  let trailingCursor = visibleLyricsLength;
+
+  return [...(line?.chords || [])]
+    .sort((left, right) => left.position - right.position || left.order - right.order)
+    .map((chord) => {
+      let renderPosition = chord.position;
+
+      // Keep end-of-line chords from stacking on top of each other when the lyric
+      // text has already ended and the stored spacing is narrower than the label width.
+      if (renderPosition >= visibleLyricsLength) {
+        renderPosition = Math.max(renderPosition, trailingCursor);
+        trailingCursor = renderPosition + chord.text.length + 1;
+      }
+
+      return {
+        ...chord,
+        renderPosition,
+      };
+    });
+}
+
 function getNextChordOrder(line) {
   if (!line?.chords?.length) {
     return 0;
@@ -390,10 +413,11 @@ function createChordRow(line, lineIndex, editable, sectionId = "") {
     track.classList.add("leader-chord-track-insert");
   }
 
+  const renderedChords = getRenderedChords(line);
   const columns = Math.max(
     1,
     line.lyrics.length,
-    ...line.chords.map((chord) => chord.position + chord.text.length),
+    ...renderedChords.map((chord) => chord.renderPosition + chord.text.length),
   );
   track.style.width = `${columns * getCharacterWidth()}px`;
 
@@ -402,12 +426,11 @@ function createChordRow(line, lineIndex, editable, sectionId = "") {
   lyric.textContent = line.lyrics || " ";
   track.append(lyric);
 
-  const sortedChords = [...line.chords].sort((left, right) => left.position - right.position || left.order - right.order);
-  sortedChords.forEach((chord) => {
+  renderedChords.forEach((chord) => {
     const marker = document.createElement(editable ? "button" : "span");
     marker.className = "leader-chord-marker";
     marker.textContent = chord.text;
-    marker.style.left = `${chord.position * getCharacterWidth()}px`;
+    marker.style.left = `${chord.renderPosition * getCharacterWidth()}px`;
     marker.dataset.lineIndex = String(lineIndex);
     marker.dataset.chordOrder = String(chord.order);
     marker.dataset.sectionId = sectionId;

@@ -109,6 +109,31 @@ function parseChordSegments(line) {
   return segments;
 }
 
+function addSpacingToTrailingChordSegments(segments) {
+  let lastLyricIndex = -1;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    if ((segments[index].lyric || "").trim()) {
+      lastLyricIndex = index;
+    }
+  }
+
+  if (lastLyricIndex < 0 || lastLyricIndex >= segments.length - 1) {
+    return segments;
+  }
+
+  return segments.map((segment, index) => {
+    if (index <= lastLyricIndex || !segment.chord) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      trailingChord: true,
+    };
+  });
+}
+
 function renderChordContent(content) {
   const fragment = document.createDocumentFragment();
   const lines = String(content || "").split("\n");
@@ -123,7 +148,7 @@ function renderChordContent(content) {
       continue;
     }
 
-    const segments = parseChordSegments(line);
+    const segments = addSpacingToTrailingChordSegments(parseChordSegments(line));
     const hasChords = segments.some((segment) => segment.chord);
 
     if (!hasChords) {
@@ -135,6 +160,9 @@ function renderChordContent(content) {
     for (const segment of segments) {
       const wrapper = document.createElement("span");
       wrapper.className = "chord-segment";
+      if (segment.trailingChord) {
+        wrapper.classList.add("chord-segment-trailing");
+      }
 
       const chord = document.createElement("span");
       chord.className = "chord-marker";

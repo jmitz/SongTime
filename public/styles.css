@@ -478,6 +478,10 @@ textarea {
   vertical-align: top;
 }
 
+.chord-segment-trailing {
+  margin-right: 1ch;
+}
+
 .chord-marker,
 .lyric-segment {
   display: block;
