@@ -48,7 +48,7 @@ let eligibleSetlistSongs = [];
 let isSavingSetlist = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
-let isSetlistPanelOpen = true;
+let isSetlistPanelOpen = false;
 const PERFORMING_STORAGE_KEY = "songlist-performing-mode";
 
 function getSongStatusColor(song) {
@@ -713,6 +713,7 @@ function renderSetlistSongOptions() {
     const option = document.createElement("option");
     option.value = String(song.id);
     option.textContent = song.title;
+    option.style.color = getSongStatusColor(song);
     setlistSongSelect.append(option);
   });
 
@@ -748,6 +749,7 @@ function renderSetlist() {
     item.draggable = !isSavingSetlist;
     item.dataset.songId = String(entry.songId);
     item.textContent = entry.title;
+    item.style.color = getSongStatusColor(entry);
     if (index === activeIndex) {
       item.classList.add("setlist-pill-active");
     }
