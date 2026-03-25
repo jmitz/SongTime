@@ -270,7 +270,16 @@ deleteSongButton.addEventListener("click", async () => {
   }
 
   const targetSong = song || activeSong;
-  if (!window.confirm(`Delete "${targetSong.title}"? This cannot be undone.`)) {
+  const confirmation = window.prompt(
+    `Type the song title to delete it:\n\n${targetSong.title}`,
+    "",
+  );
+  if (confirmation === null) {
+    return;
+  }
+
+  if (confirmation.trim() !== targetSong.title) {
+    setStatus("Delete cancelled: title did not match.", true);
     return;
   }
 
