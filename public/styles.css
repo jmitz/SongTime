@@ -131,7 +131,12 @@ body {
   padding: 20px;
 }
 
+.leader-shell {
+  width: 100%;
+}
+
 .user-shell {
+  width: 100%;
   grid-template-columns: 1fr;
 }
 
