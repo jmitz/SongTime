@@ -251,7 +251,14 @@ textarea {
 
 .song-header h1,
 .song-header h2 {
-  font-size: clamp(2rem, 5vw, 3.8rem);
+  font-size: clamp(1.35rem, 3vw, 2.35rem);
+}
+
+.song-meta {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .section-label {

@@ -1,4 +1,5 @@
 const songTitle = document.getElementById("song-title");
+const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const connectionStatus = document.getElementById("connection-status");
@@ -67,6 +68,20 @@ function formatSectionLabel(section) {
   };
   const description = lookup[match[1].toUpperCase()] || match[1].toUpperCase();
   return match[2] ? `${description} ${match[2]}` : description;
+}
+
+function formatSongMeta(song) {
+  const parts = [];
+
+  if (song?.authors) {
+    parts.push(song.authors);
+  }
+
+  if (song?.ccliNum) {
+    parts.push(`CCLI ${song.ccliNum}`);
+  }
+
+  return parts.join(" • ");
 }
 
 function toLyricsOnly(content) {
@@ -189,6 +204,7 @@ function renderSong(song, section) {
   currentSong = song;
   currentSection = section;
   songTitle.textContent = song.title;
+  songMeta.textContent = formatSongMeta(song);
   sectionLabel.textContent = formatSectionLabel(section);
 
   if (getShowChords()) {
