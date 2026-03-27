@@ -686,7 +686,7 @@ body.performing-mode .setlist-pill {
   z-index: 20;
   display: grid;
   gap: 18px;
-  width: min(225px, calc(100vw - 40px));
+  width: min(320px, calc(100vw - 40px));
   padding: 18px;
   border-radius: 20px;
   border: 1px solid rgba(76, 54, 31, 0.12);
