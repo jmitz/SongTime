@@ -317,9 +317,10 @@ function createRepository(db) {
     listSetlist() {
       return setlist.map((entry) => ({ ...entry }));
     },
-    listSongSummaries({ initial = null } = {}) {
+    listSongSummaries({ initial = null, chordPlay = null } = {}) {
       return songs
         .filter((song) => (typeof initial === "boolean" ? song.audit.initial === initial : true))
+        .filter((song) => (typeof chordPlay === "boolean" ? song.audit.chordPlay === chordPlay : true))
         .map((song) => ({
           id: song.id,
           title: song.title,
@@ -370,6 +371,27 @@ function createRepository(db) {
       replaceSetlist(normalizedSongIds);
       refreshSongs();
       return this.listSetlist();
+    },
+    addSongToSetlist(songId) {
+      const numericSongId = Number(songId);
+      if (!Number.isInteger(numericSongId)) {
+        throw new Error("Set list contains an invalid song.");
+      }
+
+      const song = songsById.get(numericSongId);
+      if (!song) {
+        throw new Error("Set list contains a song that does not exist.");
+      }
+
+      if (!song.audit?.initial || !song.audit?.chordPlay) {
+        throw new Error(`"${song.title}" must have initial edit and chord play checked before it can be suggested.`);
+      }
+
+      if (setlist.some((entry) => entry.songId === numericSongId)) {
+        throw new Error(`"${song.title}" is already in the set list.`);
+      }
+
+      return this.saveSetlist([...setlist.map((entry) => entry.songId), numericSongId]);
     },
     createSong(songInput) {
       return persistSong(songInput);

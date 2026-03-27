@@ -83,6 +83,13 @@ app.get("/api/setlist", (_req, res) => {
   });
 });
 
+app.get("/api/user-song-picks", (_req, res) => {
+  res.json({
+    setList: repository.listSetlist(),
+    eligibleSongs: repository.listSongSummaries({ initial: true, chordPlay: true }),
+  });
+});
+
 app.get("/api/section-types", (_req, res) => {
   res.json({ sectionTypes: repository.sectionTypes });
 });
@@ -153,6 +160,20 @@ app.put("/api/setlist", (req, res) => {
     res.json({
       setList,
       eligibleSongs: repository.listSongSummaries({ initial: true }),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/user-song-picks", (req, res) => {
+  try {
+    const setList = repository.addSongToSetlist(req.body?.songId);
+    broadcastSetlist();
+    broadcastState();
+    res.json({
+      setList,
+      eligibleSongs: repository.listSongSummaries({ initial: true, chordPlay: true }),
     });
   } catch (error) {
     res.status(400).json({ error: error.message });

@@ -404,6 +404,12 @@ body.performing-mode .setlist-pill {
   justify-content: end;
 }
 
+.user-toolbar .pill-button {
+  background: rgba(255, 248, 239, 0.92);
+  color: var(--text);
+  border: 1px solid rgba(76, 54, 31, 0.12);
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
@@ -634,6 +640,64 @@ body.performing-mode .setlist-pill {
   font-size: clamp(1.05rem, 1.9vw, 1.4rem);
 }
 
+.user-pick-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 20;
+  display: grid;
+  gap: 16px;
+  width: min(360px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(76, 54, 31, 0.12);
+  background: rgba(255, 252, 246, 0.96);
+  box-shadow: 0 18px 42px rgba(69, 45, 17, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.user-pick-panel[hidden] {
+  display: none;
+}
+
+.user-pick-panel-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.user-pick-panel-header h2 {
+  margin: 0;
+}
+
+.user-pick-list {
+  display: grid;
+  gap: 12px;
+}
+
+.user-pick-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(76, 54, 31, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.user-pick-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.user-pick-meta strong {
+  font-size: 1rem;
+}
+
 .song-content.with-inline-chords {
   white-space: normal;
 }
@@ -804,6 +868,13 @@ body.performing-mode .setlist-pill {
   .editor-control-panel {
     position: static;
     width: 100%;
+  }
+
+  .user-pick-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin: 0 0 20px;
   }
 
   .editor-shell {

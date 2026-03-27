@@ -4,13 +4,24 @@ const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const connectionStatus = document.getElementById("connection-status");
 const showChordsToggle = document.getElementById("show-chords");
+const openPickPanelButton = document.getElementById("open-pick-panel-button");
+const userPickPanel = document.getElementById("user-pick-panel");
+const closePickPanelButton = document.getElementById("close-pick-panel-button");
+const pickSongSearch = document.getElementById("pick-song-search");
+const pickPanelStatus = document.getElementById("pick-panel-status");
+const pickSongList = document.getElementById("pick-song-list");
 
 let socket;
 let allowScroll = true;
 let currentSong = null;
 let currentSection = null;
+let setList = [];
+let eligiblePickSongs = [];
+let isPickPanelOpen = false;
+let isSubmittingPick = false;
 
 const STORAGE_KEY = "songlist-show-chords";
+const PICK_PANEL_STORAGE_KEY = "songlist-user-pick-panel-open";
 
 function getShowChords() {
   return showChordsToggle.checked;
@@ -230,12 +241,174 @@ function setStatus(text) {
   connectionStatus.textContent = text;
 }
 
+function setPickStatus(text, isError = false) {
+  pickPanelStatus.textContent = text;
+  pickPanelStatus.classList.toggle("pill-error", isError);
+}
+
+function isSongAlreadyPicked(songId) {
+  return setList.some((entry) => entry.songId === songId);
+}
+
+function applyPickPanelVisibility() {
+  userPickPanel.hidden = !isPickPanelOpen;
+  openPickPanelButton.setAttribute("aria-expanded", String(isPickPanelOpen));
+}
+
+function openPickPanel() {
+  isPickPanelOpen = true;
+  window.localStorage.setItem(PICK_PANEL_STORAGE_KEY, "true");
+  applyPickPanelVisibility();
+}
+
+function closePickPanel() {
+  isPickPanelOpen = false;
+  window.localStorage.setItem(PICK_PANEL_STORAGE_KEY, "false");
+  applyPickPanelVisibility();
+}
+
+function getFilteredPickSongs() {
+  const query = (pickSongSearch.value || "").trim().toLowerCase();
+  if (!query) {
+    return eligiblePickSongs;
+  }
+
+  return eligiblePickSongs.filter((song) => {
+    const haystack = `${song.title} ${song.authors || ""}`.toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function renderPickSongList() {
+  pickSongList.innerHTML = "";
+  const visibleSongs = getFilteredPickSongs();
+
+  if (eligiblePickSongs.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "muted";
+    emptyState.textContent = "No audience-ready songs are available right now.";
+    pickSongList.append(emptyState);
+    return;
+  }
+
+  if (visibleSongs.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "muted";
+    emptyState.textContent = "No songs match that search.";
+    pickSongList.append(emptyState);
+    return;
+  }
+
+  visibleSongs.forEach((song) => {
+    const item = document.createElement("div");
+    item.className = "user-pick-item";
+
+    const meta = document.createElement("div");
+    meta.className = "user-pick-meta";
+
+    const title = document.createElement("strong");
+    title.textContent = song.title;
+    meta.append(title);
+
+    if (song.authors) {
+      const authors = document.createElement("span");
+      authors.className = "muted";
+      authors.textContent = song.authors;
+      meta.append(authors);
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button-secondary";
+
+    if (isSongAlreadyPicked(song.id)) {
+      button.textContent = "In set list";
+      button.disabled = true;
+    } else {
+      button.textContent = "Suggest";
+      button.disabled = isSubmittingPick;
+      button.addEventListener("click", () => {
+        suggestSong(song.id);
+      });
+    }
+
+    item.append(meta, button);
+    pickSongList.append(item);
+  });
+}
+
+function applyPickPayload(payload) {
+  setList = Array.isArray(payload?.setList) ? payload.setList : setList;
+  eligiblePickSongs = Array.isArray(payload?.eligibleSongs) ? payload.eligibleSongs : eligiblePickSongs;
+  renderPickSongList();
+}
+
+async function loadPickableSongs() {
+  const response = await fetch("/api/user-song-picks");
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Unable to load songs.");
+  }
+
+  applyPickPayload(data);
+  setPickStatus(eligiblePickSongs.length > 0 ? "Choose a song to add to the set list" : "No audience-ready songs");
+}
+
+async function suggestSong(songId) {
+  isSubmittingPick = true;
+  setPickStatus("Adding your song...");
+  renderPickSongList();
+
+  try {
+    const response = await fetch("/api/user-song-picks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ songId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to add song.");
+    }
+
+    applyPickPayload(data);
+    setPickStatus("Song added to the set list");
+  } catch (error) {
+    setPickStatus(error.message, true);
+  } finally {
+    isSubmittingPick = false;
+    renderPickSongList();
+  }
+}
+
 showChordsToggle.checked = window.localStorage.getItem(STORAGE_KEY) === "true";
+isPickPanelOpen = window.localStorage.getItem(PICK_PANEL_STORAGE_KEY) === "true";
+applyPickPanelVisibility();
+
 showChordsToggle.addEventListener("change", () => {
   window.localStorage.setItem(STORAGE_KEY, String(showChordsToggle.checked));
   if (currentSong && currentSection) {
     renderSong(currentSong, currentSection);
   }
+});
+
+openPickPanelButton.addEventListener("click", () => {
+  if (isPickPanelOpen) {
+    closePickPanel();
+    return;
+  }
+
+  openPickPanel();
+});
+
+closePickPanelButton.addEventListener("click", () => {
+  closePickPanel();
+});
+
+pickSongSearch.addEventListener("input", () => {
+  renderPickSongList();
 });
 
 function connect() {
@@ -250,6 +423,10 @@ function connect() {
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     if (message.type === "state") {
+      if (Array.isArray(message.payload.setList)) {
+        setList = message.payload.setList;
+        renderPickSongList();
+      }
       renderSong(
         message.payload.currentSong,
         resolveSection(message.payload.currentSong, message.payload.currentSection, message.payload.currentSectionIndex),
@@ -260,6 +437,15 @@ function connect() {
     if (message.type === "scroll" && allowScroll) {
       applyScroll(message.payload.scrollRatio);
     }
+
+    if (message.type === "setlist") {
+      applyPickPayload({
+        setList: message.payload.setList,
+        eligibleSongs: message.payload.eligibleSongs?.filter(
+          (song) => Boolean(song?.audit?.initial) && Boolean(song?.audit?.chordPlay),
+        ),
+      });
+    }
   });
 
   socket.addEventListener("close", () => {
@@ -267,5 +453,9 @@ function connect() {
     window.setTimeout(connect, 1000);
   });
 }
+
+loadPickableSongs().catch((error) => {
+  setPickStatus(error.message, true);
+});
 
 connect();

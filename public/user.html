@@ -17,6 +17,7 @@
             <p id="section-label" class="section-label">Section</p>
           </div>
           <div class="user-toolbar">
+            <button id="open-pick-panel-button" class="pill pill-button" type="button">Pick songs</button>
             <label class="toggle">
               <input id="show-chords" type="checkbox" />
               <span>Show chords</span>
@@ -25,6 +26,29 @@
           </div>
         </header>
         <section id="song-content" class="song-content user-content"></section>
+        <aside id="user-pick-panel" class="user-pick-panel" hidden>
+          <div class="user-pick-panel-header">
+            <div>
+              <p class="eyebrow">Audience Picks</p>
+              <h2>Suggest a song</h2>
+              <p class="muted">Only songs ready for the audience view can be added to the current set list.</p>
+            </div>
+            <button
+              id="close-pick-panel-button"
+              class="setlist-close-button"
+              type="button"
+              aria-label="Close song pick dialog"
+            >
+              ×
+            </button>
+          </div>
+          <label class="field">
+            <span>Search songs</span>
+            <input id="pick-song-search" type="search" placeholder="Filter by title or author" />
+          </label>
+          <div id="pick-panel-status" class="pill">Loading songs...</div>
+          <div id="pick-song-list" class="user-pick-list" aria-live="polite"></div>
+        </aside>
       </main>
     </div>
     <script src="/song-render.js" defer></script>
