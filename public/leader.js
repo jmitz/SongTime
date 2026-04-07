@@ -3,14 +3,10 @@ const songTitle = document.getElementById("song-title");
 const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
-const openSetlistButton = document.getElementById("open-setlist-button");
-const setlistPanel = document.getElementById("setlist-panel");
-const setlistSongSelect = document.getElementById("setlist-song-select");
-const setlistAddButton = document.getElementById("setlist-add-button");
+const addCurrentSongButton = document.getElementById("add-current-song-button");
 const setlistGenerateButton = document.getElementById("setlist-generate-button");
 const setlistClearButton = document.getElementById("setlist-clear-button");
 const setlistPerformingToggle = document.getElementById("setlist-performing-toggle");
-const setlistClosePerformingButton = document.getElementById("setlist-close-performing-button");
 const setlistStatus = document.getElementById("setlist-status");
 const setlistList = document.getElementById("setlist-list");
 const leaderCount = document.getElementById("leader-count");
@@ -48,7 +44,6 @@ let eligibleSetlistSongs = [];
 let isSavingSetlist = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
-let isSetlistPanelOpen = false;
 const PERFORMING_STORAGE_KEY = "songlist-performing-mode";
 
 function getSongStatusColor(song) {
@@ -78,12 +73,12 @@ function getActiveSetlistIndex(songId = currentSong?.id) {
 
 function updateSetlistControls() {
   const hasEligibleSongs = eligibleSetlistSongs.length > 0;
-  const selectedSongId = Number(setlistSongSelect.value);
-  const alreadyIncluded = setList.some((entry) => entry.songId === selectedSongId);
+  const currentSongId = currentSong?.id;
+  const currentSongEligible = eligibleSetlistSongs.some((song) => song.id === currentSongId);
+  const alreadyIncluded = setList.some((entry) => entry.songId === currentSongId);
 
-  setlistSongSelect.disabled = isSavingSetlist || !hasEligibleSongs;
-  setlistAddButton.disabled =
-    isSavingSetlist || !hasEligibleSongs || !Number.isInteger(selectedSongId) || alreadyIncluded;
+  addCurrentSongButton.disabled =
+    isSavingSetlist || !currentSongEligible || !Number.isInteger(currentSongId) || alreadyIncluded;
   setlistGenerateButton.disabled = isSavingSetlist || !hasEligibleSongs;
   setlistClearButton.disabled = isSavingSetlist || setList.length === 0;
 }
@@ -92,33 +87,8 @@ function isPerformingMode() {
   return setlistPerformingToggle.checked;
 }
 
-function applySetlistPanelVisibility() {
-  const shouldShowPanel = isSetlistPanelOpen || isPerformingMode();
-  setlistPanel.hidden = !shouldShowPanel;
-  openSetlistButton.hidden = shouldShowPanel;
-}
-
 function applyPerformingMode() {
   document.body.classList.toggle("performing-mode", isPerformingMode());
-  setlistClosePerformingButton.setAttribute(
-    "aria-label",
-    isPerformingMode() ? "Stop performing" : "Close set list dialog",
-  );
-  applySetlistPanelVisibility();
-}
-
-function openSetlistPanel() {
-  isSetlistPanelOpen = true;
-  applySetlistPanelVisibility();
-}
-
-function closeSetlistPanel() {
-  if (isPerformingMode()) {
-    return;
-  }
-
-  isSetlistPanelOpen = false;
-  applySetlistPanelVisibility();
 }
 
 function getNextSetlistSongId(currentSongId = currentSong?.id) {
@@ -696,34 +666,6 @@ function renderSongOptions(songs) {
   syncSongSelectColor(songSelect.value);
 }
 
-function renderSetlistSongOptions() {
-  const previousSelection = setlistSongSelect.value;
-  setlistSongSelect.innerHTML = "";
-
-  if (eligibleSetlistSongs.length === 0) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "No checked songs available";
-    setlistSongSelect.append(option);
-    updateSetlistControls();
-    return;
-  }
-
-  eligibleSetlistSongs.forEach((song) => {
-    const option = document.createElement("option");
-    option.value = String(song.id);
-    option.textContent = song.title;
-    option.style.color = getSongStatusColor(song);
-    setlistSongSelect.append(option);
-  });
-
-  if (previousSelection && eligibleSetlistSongs.some((song) => String(song.id) === previousSelection)) {
-    setlistSongSelect.value = previousSelection;
-  }
-
-  updateSetlistControls();
-}
-
 function renderSetlist() {
   setlistList.innerHTML = "";
   const activeIndex = getActiveSetlistIndex();
@@ -734,7 +676,7 @@ function renderSetlist() {
     emptyState.className = "muted";
     emptyState.textContent =
       setList.length === 0
-        ? "Generate or build a set list to keep a leader-ready order."
+        ? "Add the current song or generate a set list to keep a leader-ready order."
         : "All songs in this set have been completed.";
     setlistList.append(emptyState);
     updateSetlistControls();
@@ -814,7 +756,6 @@ function renderSetlist() {
 function applySetlistPayload(payload) {
   setList = Array.isArray(payload?.setList) ? payload.setList : [];
   eligibleSetlistSongs = Array.isArray(payload?.eligibleSongs) ? payload.eligibleSongs : eligibleSetlistSongs;
-  renderSetlistSongOptions();
   renderSetlist();
 
   if (!isSavingSetlist) {
@@ -852,9 +793,10 @@ async function saveSetlist(songIds, statusMessage = "Saving set list...") {
   }
 }
 
-function addSelectedSongToSetlist() {
-  const songId = Number(setlistSongSelect.value);
-  if (!Number.isInteger(songId) || setList.some((entry) => entry.songId === songId)) {
+function addCurrentSongToSetlist() {
+  const songId = currentSong?.id;
+  const currentSongEligible = eligibleSetlistSongs.some((song) => song.id === songId);
+  if (!Number.isInteger(songId) || !currentSongEligible || setList.some((entry) => entry.songId === songId)) {
     updateSetlistControls();
     return;
   }
@@ -903,7 +845,6 @@ function moveSetlistSongBySongId(sourceSongId, targetSongId) {
 function stopPerformingMode() {
   setlistPerformingToggle.checked = false;
   window.localStorage.setItem(PERFORMING_STORAGE_KEY, "false");
-  isSetlistPanelOpen = true;
   applyPerformingMode();
 }
 
@@ -1257,12 +1198,8 @@ songSelect.addEventListener("change", () => {
   socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
 });
 
-setlistSongSelect.addEventListener("change", () => {
-  updateSetlistControls();
-});
-
-setlistAddButton.addEventListener("click", () => {
-  addSelectedSongToSetlist();
+addCurrentSongButton.addEventListener("click", () => {
+  addCurrentSongToSetlist();
 });
 
 setlistGenerateButton.addEventListener("click", () => {
@@ -1277,21 +1214,7 @@ setlistPerformingToggle.checked = window.localStorage.getItem(PERFORMING_STORAGE
 applyPerformingMode();
 setlistPerformingToggle.addEventListener("change", () => {
   window.localStorage.setItem(PERFORMING_STORAGE_KEY, String(setlistPerformingToggle.checked));
-  if (setlistPerformingToggle.checked) {
-    isSetlistPanelOpen = true;
-  }
   applyPerformingMode();
-});
-setlistClosePerformingButton.addEventListener("click", () => {
-  if (isPerformingMode()) {
-    stopPerformingMode();
-    return;
-  }
-
-  closeSetlistPanel();
-});
-openSetlistButton.addEventListener("click", () => {
-  openSetlistPanel();
 });
 
 editModeToggle.addEventListener("change", () => {
