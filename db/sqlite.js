@@ -5,6 +5,24 @@ const { loadSeedData } = require("./seed-data");
 
 const DEFAULT_DB_PATH = path.join(__dirname, "..", "data", "songlist.db");
 const SCHEMA_PATH = path.join(__dirname, "schema.sql");
+const MANUAL_SONG_METADATA = [
+  {
+    title: "10,000 Reasons",
+    authors: "Jonas Myrin & Matt Redman",
+  },
+];
+
+function normalizeAuthors(authors) {
+  if (typeof authors !== "string") {
+    return "";
+  }
+
+  return authors
+    .replace(/\s*\|\s*/g, " & ")
+    .replace(/\s*&\s*/g, " & ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 
 function hydrateSectionTypes(db) {
   return db
@@ -127,7 +145,7 @@ function validateSongInput(input) {
   }
 
   const ccliNum = typeof input.ccliNum === "string" ? input.ccliNum.trim() : "";
-  const authors = typeof input.authors === "string" ? input.authors.trim() : "";
+  const authors = normalizeAuthors(input.authors);
   const sectionOrder = Array.isArray(input.sectionOrder)
     ? input.sectionOrder.map((sectionId) => String(sectionId).trim()).filter(Boolean)
     : [];
@@ -255,7 +273,7 @@ function createRepository(db) {
       }));
   }
 
-  function persistSong(songInput, songId = null) {
+  const persistSongTransaction = db.transaction((songInput, songId = null) => {
     const validatedSong = validateSongInput(songInput);
     const payload = {
       title: validatedSong.title,
@@ -292,6 +310,10 @@ function createRepository(db) {
 
     refreshSongs();
     return mapSongRow(songRow);
+  });
+
+  function persistSong(songInput, songId = null) {
+    return persistSongTransaction(songInput, songId);
   }
 
   refreshSongs();
@@ -564,18 +586,30 @@ function initializeDatabase() {
   const songCount = db.prepare("SELECT COUNT(*) AS count FROM songs").get().count;
   const updateSongMetadata = db.prepare(
     `UPDATE songs
-     SET authors = @authors,
+     SET authors = CASE
+           WHEN (@authors IS NOT NULL AND @authors <> '') THEN @authors
+           ELSE authors
+         END,
          ccli_num = CASE
            WHEN (@ccli_num IS NOT NULL AND @ccli_num <> '') THEN @ccli_num
            ELSE ccli_num
          END,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = @id
+     WHERE title = @title
        AND (
-         authors <> @authors
+         ((@authors IS NOT NULL AND @authors <> '') AND authors <> @authors)
          OR ((ccli_num IS NULL OR ccli_num = '') AND (@ccli_num IS NOT NULL AND @ccli_num <> ''))
        )`,
   );
+  const syncKnownSongMetadata = db.transaction(() => {
+    for (const song of MANUAL_SONG_METADATA) {
+      updateSongMetadata.run({
+        title: song.title,
+        authors: normalizeAuthors(song.authors),
+        ccli_num: null,
+      });
+    }
+  });
 
   if (songCount === 0) {
     const insertSong = db.prepare(
@@ -612,6 +646,8 @@ function initializeDatabase() {
     syncExistingSongs();
     insertMissingAudit.run();
   }
+
+  syncKnownSongMetadata();
 
   return {
     db,
