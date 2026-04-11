@@ -103,6 +103,34 @@ body {
   margin-top: 36px;
 }
 
+.system-info-card {
+  display: inline-grid;
+  gap: 6px;
+  margin-top: 24px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(76, 54, 31, 0.12);
+  background: rgba(255, 248, 239, 0.92);
+}
+
+.system-info-card strong {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+}
+
+.system-info-card-compact {
+  width: 100%;
+  margin-top: 0;
+}
+
+.system-info-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .role-card {
   display: grid;
   gap: 10px;

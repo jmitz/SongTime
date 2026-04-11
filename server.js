@@ -1,12 +1,16 @@
 const path = require("path");
 const http = require("http");
+const dns = require("dns").promises;
+const os = require("os");
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const { initializeDatabase } = require("./db/sqlite");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const PORT = Number(process.env.PORT || 3000);
-const { dbPath, repository } = initializeDatabase();
+const PUBLIC_HOST = (process.env.PUBLIC_HOST || "").trim();
+const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || PORT);
+const { db, dbPath, repository } = initializeDatabase();
 
 const app = express();
 app.use(express.json());
@@ -51,6 +55,42 @@ function serializeState() {
     leaderCount: state.leaderCount,
     userCount: state.userCount,
   };
+}
+
+function getSystemInterfaceIpAddress() {
+  const interfaces = os.networkInterfaces();
+  let firstExternalAddress = null;
+
+  for (const networkInterface of Object.values(interfaces)) {
+    for (const address of networkInterface || []) {
+      if (address.internal) {
+        continue;
+      }
+
+      if (!firstExternalAddress) {
+        firstExternalAddress = address.address;
+      }
+
+      if (address.family === "IPv4") {
+        return address.address;
+      }
+    }
+  }
+
+  return firstExternalAddress;
+}
+
+async function getSystemIpAddress() {
+  try {
+    const { address } = await dns.lookup("host.docker.internal", { family: 4 });
+    if (address) {
+      return address;
+    }
+  } catch (_error) {
+    // Ignore hostname lookup failures and fall back to local interface inspection.
+  }
+
+  return getSystemInterfaceIpAddress();
 }
 
 app.get("/api/songs", (req, res) => {
@@ -213,12 +253,32 @@ app.get("/api/state", (_req, res) => {
   res.json(serializeState());
 });
 
+app.get("/api/system-info", async (_req, res) => {
+  const ipAddress = PUBLIC_HOST || (await getSystemIpAddress()) || null;
+
+  res.json({
+    ipAddress,
+    port: PUBLIC_PORT,
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, songs: repository.songs.length, dbPath });
 });
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+let isShuttingDown = false;
+let isDatabaseClosed = false;
+
+function closeDatabase() {
+  if (isDatabaseClosed) {
+    return;
+  }
+
+  isDatabaseClosed = true;
+  db.close();
+}
 
 function broadcast(payload) {
   const message = JSON.stringify(payload);
@@ -334,3 +394,34 @@ wss.on("connection", (socket) => {
 server.listen(PORT, () => {
   console.log(`SongList app listening on http://localhost:${PORT} using SQLite at ${dbPath}`);
 });
+
+function shutdown(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+  console.log(`Received ${signal}; shutting down SongList.`);
+
+  for (const client of wss.clients) {
+    client.close();
+  }
+
+  const forceShutdownTimer = setTimeout(() => {
+    closeDatabase();
+    process.exit(1);
+  }, 5000);
+  forceShutdownTimer.unref();
+
+  wss.close(() => {
+    server.close((error) => {
+      clearTimeout(forceShutdownTimer);
+      closeDatabase();
+      process.exit(error ? 1 : 0);
+    });
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("exit", closeDatabase);

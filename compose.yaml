@@ -15,4 +15,8 @@ services:
       - ./data:/app/data
     environment:
       PORT: 3000
+      PUBLIC_HOST: 192.168.0.142
+      PUBLIC_PORT: 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
