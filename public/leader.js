@@ -11,11 +11,11 @@ const setlistStatus = document.getElementById("setlist-status");
 const setlistList = document.getElementById("setlist-list");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
-const editModeToggleLabel = document.getElementById("edit-mode-toggle-label");
-const editModeToggle = document.getElementById("edit-mode-toggle");
+const editModeButton = document.getElementById("edit-mode-button");
 const songLockedToggle = document.getElementById("song-locked-toggle");
 const leaderEditPanel = document.getElementById("leader-edit-panel");
 const editStatus = document.getElementById("edit-status");
+const closeEditPanelButton = document.getElementById("close-edit-panel-button");
 const leaderEditActions = document.getElementById("leader-edit-actions");
 const newChordInput = document.getElementById("new-chord-input");
 const insertChordButton = document.getElementById("insert-chord-button");
@@ -39,6 +39,7 @@ let measuredCharacterWidth = null;
 let selectedChord = null;
 let insertMode = false;
 let isUpdatingLock = false;
+let editModeEnabled = false;
 let setList = [];
 let eligibleSetlistSongs = [];
 let isSavingSetlist = false;
@@ -127,11 +128,24 @@ function syncSongSelectColor(songId = songSelect.value) {
 }
 
 function disableEditMode() {
-  if (!editModeToggle.checked) {
+  if (!editModeEnabled) {
     return;
   }
 
-  editModeToggle.checked = false;
+  editModeEnabled = false;
+  insertMode = false;
+  clearSelectedChord();
+  cancelDrag();
+}
+
+function enableEditMode() {
+  if (editModeEnabled || isSongLocked() || !currentSong) {
+    syncEditPanel();
+    return;
+  }
+
+  editModeEnabled = true;
+  ensureDraftForCurrentSection();
   insertMode = false;
   clearSelectedChord();
 }
@@ -419,19 +433,35 @@ function getNextChordOrder(line) {
 }
 
 function isEditModeEnabled() {
-  return editModeToggle.checked;
+  return editModeEnabled;
+}
+
+function cancelDrag() {
+  if (!dragState) {
+    return;
+  }
+
+  dragState.marker.classList.remove("leader-chord-marker-active");
+  dragState = null;
+  window.removeEventListener("pointermove", handleDragMove);
+  window.removeEventListener("pointerup", finishDrag);
+  window.removeEventListener("pointercancel", finishDrag);
 }
 
 function updateEditControls() {
   const enabled = isEditModeEnabled();
   const locked = isSongLocked();
 
-  editModeToggleLabel.hidden = locked;
-  editModeToggle.disabled = locked || isSaving || !currentSong;
+  editModeButton.hidden = locked;
+  editModeButton.disabled = locked || isSaving || !currentSong;
+  editModeButton.textContent = enabled ? "Editing chords" : "Edit chords";
+  editModeButton.setAttribute("aria-pressed", String(enabled));
+  editModeButton.classList.toggle("button-toggle-active", enabled);
   songLockedToggle.disabled = enabled || isSaving || isUpdatingLock || !currentSong;
   songLockedToggle.checked = locked;
   leaderEditPanel.hidden = !enabled;
   leaderEditActions.hidden = !enabled;
+  closeEditPanelButton.disabled = isSaving;
   newChordInput.disabled = !enabled || isSaving || locked;
   insertChordButton.disabled = !enabled || isSaving || locked;
   deleteChordButton.disabled = !enabled || isSaving || locked || !selectedChord;
@@ -865,7 +895,7 @@ function applyState(state) {
     return;
   }
 
-  if (editModeToggle.checked && state.currentSong.audit?.chordPlay) {
+  if (isEditModeEnabled() && state.currentSong.audit?.chordPlay) {
     disableEditMode();
   }
 
@@ -1020,11 +1050,7 @@ function finishDrag(event) {
     return;
   }
 
-  dragState.marker.classList.remove("leader-chord-marker-active");
-  dragState = null;
-  window.removeEventListener("pointermove", handleDragMove);
-  window.removeEventListener("pointerup", finishDrag);
-  window.removeEventListener("pointercancel", finishDrag);
+  cancelDrag();
 
   if (currentSong && currentSection) {
     renderSong(currentSong, currentSection);
@@ -1217,18 +1243,23 @@ setlistPerformingToggle.addEventListener("change", () => {
   applyPerformingMode();
 });
 
-editModeToggle.addEventListener("change", () => {
-  if (isSongLocked()) {
+editModeButton.addEventListener("click", () => {
+  if (isEditModeEnabled()) {
     disableEditMode();
-    syncEditPanel();
+  } else {
+    enableEditMode();
+  }
+
+  if (currentSong && currentSection) {
+    renderSong(currentSong, currentSection);
     return;
   }
 
-  if (isEditModeEnabled()) {
-    ensureDraftForCurrentSection();
-    insertMode = false;
-    clearSelectedChord();
-  }
+  syncEditPanel();
+});
+
+closeEditPanelButton.addEventListener("click", () => {
+  disableEditMode();
 
   if (currentSong && currentSection) {
     renderSong(currentSong, currentSection);

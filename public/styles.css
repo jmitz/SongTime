@@ -470,6 +470,45 @@ body.performing-mode .setlist-pill {
   backdrop-filter: blur(12px);
 }
 
+.leader-edit-panel-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.leader-edit-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(76, 54, 31, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 248, 239, 0.92);
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.leader-edit-close:hover {
+  color: var(--text);
+}
+
+.leader-edit-close:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button-toggle-active {
+  background: var(--accent);
+  color: #fffaf4;
+  border-color: transparent;
+}
+
 .leader-edit-panel[hidden],
 .leader-edit-actions[hidden] {
   display: none;

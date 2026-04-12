@@ -26,10 +26,9 @@
           <span class="system-info-label">System IP</span>
           <strong data-system-ip>Loading...</strong>
         </div>
-        <label id="edit-mode-toggle-label" class="toggle">
-          <input id="edit-mode-toggle" type="checkbox" />
-          <span>Edit chords</span>
-        </label>
+        <button id="edit-mode-button" class="button button-secondary" type="button" aria-pressed="false">
+          Edit chords
+        </button>
         <label class="toggle">
           <input id="song-locked-toggle" type="checkbox" />
           <span>Song Locked</span>
@@ -69,7 +68,17 @@
           <div class="pill">Space/Right: next section, Left: previous</div>
         </header>
         <aside id="leader-edit-panel" class="leader-edit-panel" hidden>
-          <div id="edit-status" class="pill">Edit mode off</div>
+          <div class="leader-edit-panel-header">
+            <div id="edit-status" class="pill">Edit mode off</div>
+            <button
+              id="close-edit-panel-button"
+              class="leader-edit-close"
+              type="button"
+              aria-label="Stop editing chords"
+            >
+              x
+            </button>
+          </div>
           <div id="leader-edit-actions" class="leader-edit-actions" hidden>
             <p class="muted">Drag chords in the song display, insert new ones, or select a chord to delete it.</p>
             <label class="field">
