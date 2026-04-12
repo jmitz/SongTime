@@ -52,9 +52,19 @@ function serializeState() {
     currentSong,
     currentSection: getCurrentSection(currentSong),
     setList: repository.listSetlist(),
+    performanceLog: repository.getPerformanceLog(),
     leaderCount: state.leaderCount,
     userCount: state.userCount,
   };
+}
+
+function recordSongForActivePerformance(songId = state.currentSongId) {
+  const performanceLog = repository.getPerformanceLog();
+  if (!performanceLog?.active) {
+    return performanceLog;
+  }
+
+  return repository.recordPerformanceSong(songId);
 }
 
 function getSystemInterfaceIpAddress() {
@@ -120,6 +130,13 @@ app.get("/api/setlist", (_req, res) => {
   res.json({
     setList: repository.listSetlist(),
     eligibleSongs: repository.listSongSummaries({ initial: true }),
+    performanceLog: repository.getPerformanceLog(),
+  });
+});
+
+app.get("/api/performance-log", (_req, res) => {
+  res.json({
+    performanceLog: repository.getPerformanceLog(),
   });
 });
 
@@ -201,6 +218,36 @@ app.put("/api/setlist", (req, res) => {
       setList,
       eligibleSongs: repository.listSongSummaries({ initial: true }),
     });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/performance/start", (req, res) => {
+  try {
+    const performanceLog = repository.startPerformanceEvent(req.body?.songId ?? state.currentSongId);
+    broadcastState();
+    res.json({ performanceLog });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/performance/stop", (_req, res) => {
+  try {
+    const performanceLog = repository.stopPerformanceEvent();
+    broadcastState();
+    res.json({ performanceLog });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/api/performance-log", (_req, res) => {
+  try {
+    const performanceLog = repository.clearPerformanceLog();
+    broadcastState();
+    res.json({ performanceLog });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -351,9 +398,13 @@ wss.on("connection", (socket) => {
         return;
       }
 
+      const songChanged = state.currentSongId !== song.id;
       state.currentSongId = song.id;
       state.currentSectionIndex = 0;
       state.scrollRatio = 0;
+      if (songChanged) {
+        recordSongForActivePerformance(song.id);
+      }
       broadcastState();
       return;
     }

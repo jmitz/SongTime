@@ -92,6 +92,58 @@ function hydrateSetlist(db) {
     }));
 }
 
+function hydrateLatestPerformanceLog(db) {
+  const event = db
+    .prepare(
+      `SELECT id, started_at, ended_at
+       FROM performance_events
+       ORDER BY CASE WHEN ended_at IS NULL THEN 0 ELSE 1 END ASC,
+                started_at DESC,
+                id DESC
+       LIMIT 1`,
+    )
+    .get();
+
+  if (!event) {
+    return null;
+  }
+
+  const songs = db
+    .prepare(
+      `SELECT performance_event_songs.song_id,
+              performance_event_songs.position,
+              performance_event_songs.play_count,
+              performance_event_songs.first_played_at,
+              performance_event_songs.last_played_at,
+              songs.title,
+              songs.authors,
+              songs.ccli_num
+       FROM performance_event_songs
+       INNER JOIN songs ON songs.id = performance_event_songs.song_id
+       WHERE performance_event_songs.event_id = ?
+       ORDER BY performance_event_songs.position ASC, performance_event_songs.id ASC`,
+    )
+    .all(event.id)
+    .map((row) => ({
+      songId: row.song_id,
+      title: row.title,
+      authors: row.authors,
+      ccliNum: row.ccli_num,
+      position: row.position,
+      playCount: row.play_count,
+      firstPlayedAt: row.first_played_at,
+      lastPlayedAt: row.last_played_at,
+    }));
+
+  return {
+    id: event.id,
+    startedAt: event.started_at,
+    endedAt: event.ended_at,
+    active: !event.ended_at,
+    songs,
+  };
+}
+
 function mapSongRow(song) {
   return {
     id: song.id,
@@ -205,6 +257,7 @@ function createRepository(db) {
   const songsById = new Map();
   let setlist = [];
   let sectionTypes = hydrateSectionTypes(db);
+  let performanceLog = hydrateLatestPerformanceLog(db);
 
   const insertSong = db.prepare(
     `INSERT INTO songs (title, authors, ccli_num, lyrics_json, section_order_json)
@@ -254,6 +307,55 @@ function createRepository(db) {
        chordPlay = excluded.chordPlay,
        updated_at = CURRENT_TIMESTAMP`,
   );
+  const selectActivePerformanceEvent = db.prepare(
+    `SELECT id, started_at, ended_at
+     FROM performance_events
+     WHERE ended_at IS NULL
+     ORDER BY started_at DESC, id DESC
+     LIMIT 1`,
+  );
+  const insertPerformanceEvent = db.prepare(
+    `INSERT INTO performance_events (started_at, updated_at)
+     VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  );
+  const stopPerformanceEvent = db.prepare(
+    `UPDATE performance_events
+     SET ended_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND ended_at IS NULL`,
+  );
+  const selectPerformanceSongEntry = db.prepare(
+    `SELECT id, position
+     FROM performance_event_songs
+     WHERE event_id = ?
+       AND song_id = ?`,
+  );
+  const selectNextPerformanceSongPosition = db.prepare(
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position
+     FROM performance_event_songs
+     WHERE event_id = ?`,
+  );
+  const insertPerformanceSongEntry = db.prepare(
+    `INSERT INTO performance_event_songs (
+       event_id,
+       song_id,
+       position,
+       first_played_at,
+       last_played_at,
+       play_count,
+       updated_at
+     )
+     VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)`,
+  );
+  const incrementPerformanceSongEntry = db.prepare(
+    `UPDATE performance_event_songs
+     SET play_count = play_count + 1,
+         last_played_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  );
+  const deletePerformanceEvent = db.prepare("DELETE FROM performance_events WHERE id = ?");
 
   function refreshSongs() {
     sectionTypes = hydrateSectionTypes(db);
@@ -271,6 +373,16 @@ function createRepository(db) {
         ...entry,
         position: index,
       }));
+    performanceLog = hydrateLatestPerformanceLog(db);
+  }
+
+  function getActivePerformanceEvent() {
+    return selectActivePerformanceEvent.get() || null;
+  }
+
+  function refreshPerformanceLog() {
+    performanceLog = hydrateLatestPerformanceLog(db);
+    return performanceLog;
   }
 
   const persistSongTransaction = db.transaction((songInput, songId = null) => {
@@ -329,12 +441,83 @@ function createRepository(db) {
     });
   });
 
+  const startPerformanceEventTransaction = db.transaction((songId = null) => {
+    let event = getActivePerformanceEvent();
+    if (!event) {
+      const result = insertPerformanceEvent.run();
+      event = {
+        id: Number(result.lastInsertRowid),
+      };
+    }
+
+    if (songId != null) {
+      const numericSongId = Number(songId);
+      if (!Number.isInteger(numericSongId) || !songsById.has(numericSongId)) {
+        throw new Error("Song not found.");
+      }
+
+      const existingEntry = selectPerformanceSongEntry.get(event.id, numericSongId);
+      if (!existingEntry) {
+        const nextPosition = selectNextPerformanceSongPosition.get(event.id)?.next_position ?? 0;
+        insertPerformanceSongEntry.run(event.id, numericSongId, nextPosition);
+      }
+    }
+
+    return refreshPerformanceLog();
+  });
+
+  const stopPerformanceEventTransaction = db.transaction(() => {
+    const event = getActivePerformanceEvent();
+    if (event) {
+      stopPerformanceEvent.run(event.id);
+    }
+
+    return refreshPerformanceLog();
+  });
+
+  const recordPerformanceSongTransaction = db.transaction((songId) => {
+    const numericSongId = Number(songId);
+    if (!Number.isInteger(numericSongId) || !songsById.has(numericSongId)) {
+      throw new Error("Song not found.");
+    }
+
+    let event = getActivePerformanceEvent();
+    if (!event) {
+      const result = insertPerformanceEvent.run();
+      event = {
+        id: Number(result.lastInsertRowid),
+      };
+    }
+
+    const existingEntry = selectPerformanceSongEntry.get(event.id, numericSongId);
+    if (existingEntry) {
+      incrementPerformanceSongEntry.run(existingEntry.id);
+    } else {
+      const nextPosition = selectNextPerformanceSongPosition.get(event.id)?.next_position ?? 0;
+      insertPerformanceSongEntry.run(event.id, numericSongId, nextPosition);
+    }
+
+    return refreshPerformanceLog();
+  });
+
+  const clearPerformanceLogTransaction = db.transaction(() => {
+    const log = performanceLog || hydrateLatestPerformanceLog(db);
+    if (log) {
+      deletePerformanceEvent.run(log.id);
+    }
+
+    return refreshPerformanceLog();
+  });
+
   return {
     get songs() {
       return songs;
     },
     get sectionTypes() {
       return sectionTypes;
+    },
+    get performanceLog() {
+      return performanceLog;
     },
     listSetlist() {
       return setlist.map((entry) => ({ ...entry }));
@@ -360,6 +543,26 @@ function createRepository(db) {
       }
 
       return songsById.get(numericSongId) || null;
+    },
+    getPerformanceLog() {
+      return performanceLog
+        ? {
+            ...performanceLog,
+            songs: performanceLog.songs.map((song) => ({ ...song })),
+          }
+        : null;
+    },
+    startPerformanceEvent(songId = null) {
+      return startPerformanceEventTransaction(songId);
+    },
+    stopPerformanceEvent() {
+      return stopPerformanceEventTransaction();
+    },
+    recordPerformanceSong(songId) {
+      return recordPerformanceSongTransaction(songId);
+    },
+    clearPerformanceLog() {
+      return clearPerformanceLogTransaction();
     },
     saveSetlist(songIds) {
       if (!Array.isArray(songIds)) {
@@ -565,6 +768,47 @@ function ensureSongsSchema(db) {
 
     if (!hasExpectedColumns) {
       db.exec("DROP TABLE IF EXISTS setlist_entries");
+    }
+  }
+
+  const performanceEventsTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'performance_events'")
+    .get();
+
+  if (performanceEventsTable) {
+    const columns = db.prepare("PRAGMA table_info(performance_events)").all();
+    const columnNames = columns.map((column) => column.name);
+    const hasExpectedColumns =
+      columnNames.includes("started_at") &&
+      columnNames.includes("ended_at") &&
+      columnNames.includes("created_at") &&
+      columnNames.includes("updated_at");
+
+    if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS performance_event_songs");
+      db.exec("DROP TABLE IF EXISTS performance_events");
+    }
+  }
+
+  const performanceEventSongsTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'performance_event_songs'")
+    .get();
+
+  if (performanceEventSongsTable) {
+    const columns = db.prepare("PRAGMA table_info(performance_event_songs)").all();
+    const columnNames = columns.map((column) => column.name);
+    const hasExpectedColumns =
+      columnNames.includes("event_id") &&
+      columnNames.includes("song_id") &&
+      columnNames.includes("first_played_at") &&
+      columnNames.includes("last_played_at") &&
+      columnNames.includes("play_count") &&
+      columnNames.includes("position") &&
+      columnNames.includes("created_at") &&
+      columnNames.includes("updated_at");
+
+    if (!hasExpectedColumns) {
+      db.exec("DROP TABLE IF EXISTS performance_event_songs");
     }
   }
 

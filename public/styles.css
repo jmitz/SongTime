@@ -259,6 +259,11 @@ body.performing-mode .setlist-list {
   grid-template-columns: 1fr;
 }
 
+.ccli-log-panel .setlist-list {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
 .setlist-pill {
   display: inline-flex;
   align-items: center;
@@ -297,6 +302,32 @@ body.performing-mode .setlist-pill {
 .setlist-pill-drop-target {
   border-color: rgba(36, 85, 181, 0.3);
   box-shadow: inset 0 0 0 1px rgba(36, 85, 181, 0.18);
+}
+
+.ccli-log-entry {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(76, 54, 31, 0.08);
+  background: rgba(255, 248, 239, 0.72);
+}
+
+.ccli-log-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.ccli-log-entry-title {
+  font-weight: 700;
+}
+
+.ccli-log-entry-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .status-panel div {

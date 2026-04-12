@@ -42,6 +42,35 @@ CREATE TABLE IF NOT EXISTS setlist_entries (
 CREATE INDEX IF NOT EXISTS idx_setlist_entries_position
 ON setlist_entries (position, song_id);
 
+CREATE TABLE IF NOT EXISTS performance_events (
+  id INTEGER PRIMARY KEY,
+  started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ended_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_performance_events_started_at
+ON performance_events (started_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS performance_event_songs (
+  id INTEGER PRIMARY KEY,
+  event_id INTEGER NOT NULL,
+  song_id INTEGER NOT NULL,
+  first_played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  play_count INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (event_id) REFERENCES performance_events(id) ON DELETE CASCADE,
+  FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE,
+  UNIQUE (event_id, song_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_performance_event_songs_event_position
+ON performance_event_songs (event_id, position, id);
+
 INSERT INTO section_types (code, desc) VALUES
   ('V', 'Verse'),
   ('C', 'Chorus'),

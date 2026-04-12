@@ -9,6 +9,10 @@ const setlistClearButton = document.getElementById("setlist-clear-button");
 const setlistPerformingToggle = document.getElementById("setlist-performing-toggle");
 const setlistStatus = document.getElementById("setlist-status");
 const setlistList = document.getElementById("setlist-list");
+const ccliLogStatus = document.getElementById("ccli-log-status");
+const ccliLogList = document.getElementById("ccli-log-list");
+const copyCcliLogButton = document.getElementById("copy-ccli-log-button");
+const clearCcliLogButton = document.getElementById("clear-ccli-log-button");
 const leaderCount = document.getElementById("leader-count");
 const userCount = document.getElementById("user-count");
 const editModeButton = document.getElementById("edit-mode-button");
@@ -43,9 +47,10 @@ let editModeEnabled = false;
 let setList = [];
 let eligibleSetlistSongs = [];
 let isSavingSetlist = false;
+let performanceLog = null;
+let isUpdatingPerformance = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
-const PERFORMING_STORAGE_KEY = "songlist-performing-mode";
 
 function getSongStatusColor(song) {
   if (!song?.audit?.initial) {
@@ -68,6 +73,11 @@ function setSetlistStatus(message, isError = false) {
   setlistStatus.classList.toggle("pill-error", isError);
 }
 
+function setCcliLogStatus(message, isError = false) {
+  ccliLogStatus.textContent = message;
+  ccliLogStatus.classList.toggle("pill-error", isError);
+}
+
 function getActiveSetlistIndex(songId = currentSong?.id) {
   return setList.findIndex((entry) => entry.songId === songId);
 }
@@ -82,14 +92,19 @@ function updateSetlistControls() {
     isSavingSetlist || !currentSongEligible || !Number.isInteger(currentSongId) || alreadyIncluded;
   setlistGenerateButton.disabled = isSavingSetlist || !hasEligibleSongs;
   setlistClearButton.disabled = isSavingSetlist || setList.length === 0;
+  setlistPerformingToggle.disabled = isSavingSetlist || isUpdatingPerformance || !currentSong;
+  copyCcliLogButton.disabled = isUpdatingPerformance || !performanceLog || performanceLog.songs.length === 0;
+  clearCcliLogButton.disabled = isUpdatingPerformance || !performanceLog;
 }
 
 function isPerformingMode() {
-  return setlistPerformingToggle.checked;
+  return Boolean(performanceLog?.active);
 }
 
 function applyPerformingMode() {
-  document.body.classList.toggle("performing-mode", isPerformingMode());
+  const active = isPerformingMode();
+  setlistPerformingToggle.checked = active;
+  document.body.classList.toggle("performing-mode", active);
 }
 
 function getNextSetlistSongId(currentSongId = currentSong?.id) {
@@ -783,10 +798,111 @@ function renderSetlist() {
   updateSetlistControls();
 }
 
+function formatPerformanceTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildCcliLogText(log = performanceLog) {
+  if (!log) {
+    return "";
+  }
+
+  const lines = [];
+  lines.push(`Event started: ${formatPerformanceTimestamp(log.startedAt)}`);
+  lines.push(`Event ended: ${log.endedAt ? formatPerformanceTimestamp(log.endedAt) : "In progress"}`);
+  lines.push("");
+
+  if (!Array.isArray(log.songs) || log.songs.length === 0) {
+    lines.push("No songs recorded.");
+    return lines.join("\n");
+  }
+
+  log.songs.forEach((song, index) => {
+    lines.push(`${index + 1}. ${song.title}`);
+    lines.push(`CCLI: ${song.ccliNum || "Missing"}`);
+    lines.push(`Authors: ${song.authors || "Unknown"}`);
+    lines.push(`Times played: ${song.playCount}`);
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
+}
+
+function renderCcliLog() {
+  ccliLogList.innerHTML = "";
+
+  if (!performanceLog) {
+    setCcliLogStatus("No event recorded yet");
+    updateSetlistControls();
+    return;
+  }
+
+  const statusMessage = performanceLog.active
+    ? `Event started ${formatPerformanceTimestamp(performanceLog.startedAt)}`
+    : `Last event ended ${formatPerformanceTimestamp(performanceLog.endedAt || performanceLog.startedAt)}`;
+  setCcliLogStatus(statusMessage);
+
+  if (!performanceLog.songs.length) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "muted";
+    emptyState.textContent = performanceLog.active
+      ? "Songs will appear here as they are played."
+      : "This event did not record any songs.";
+    ccliLogList.append(emptyState);
+    updateSetlistControls();
+    return;
+  }
+
+  performanceLog.songs.forEach((song, index) => {
+    const item = document.createElement("div");
+    item.className = "ccli-log-entry";
+
+    const header = document.createElement("div");
+    header.className = "ccli-log-entry-header";
+
+    const title = document.createElement("span");
+    title.className = "ccli-log-entry-title";
+    title.textContent = `${index + 1}. ${song.title}`;
+
+    const count = document.createElement("span");
+    count.className = "pill";
+    count.textContent = song.playCount > 1 ? `${song.playCount} plays` : "Played";
+
+    header.append(title, count);
+
+    const meta = document.createElement("div");
+    meta.className = "ccli-log-entry-meta";
+    meta.textContent = [
+      song.authors || "Unknown author",
+      song.ccliNum ? `CCLI ${song.ccliNum}` : "Missing CCLI number",
+      `First played ${formatPerformanceTimestamp(song.firstPlayedAt)}`,
+    ].join(" • ");
+
+    item.append(header, meta);
+    ccliLogList.append(item);
+  });
+
+  updateSetlistControls();
+}
+
 function applySetlistPayload(payload) {
   setList = Array.isArray(payload?.setList) ? payload.setList : [];
   eligibleSetlistSongs = Array.isArray(payload?.eligibleSongs) ? payload.eligibleSongs : eligibleSetlistSongs;
+  performanceLog = payload?.performanceLog ?? performanceLog;
   renderSetlist();
+  renderCcliLog();
 
   if (!isSavingSetlist) {
     setSetlistStatus(setList.length > 0 ? "Set list ready" : "Set list is empty");
@@ -872,20 +988,83 @@ function moveSetlistSongBySongId(sourceSongId, targetSongId) {
   moveSetlistSong(fromIndex, toIndex);
 }
 
-function stopPerformingMode() {
-  setlistPerformingToggle.checked = false;
-  window.localStorage.setItem(PERFORMING_STORAGE_KEY, "false");
-  applyPerformingMode();
+async function setPerformingMode(nextValue) {
+  isUpdatingPerformance = true;
+  updateSetlistControls();
+
+  try {
+    const response = await fetch(nextValue ? "/api/performance/start" : "/api/performance/stop", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(nextValue ? { songId: currentSong?.id } : {}),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to update event status.");
+    }
+
+    performanceLog = data.performanceLog ?? null;
+    applyPerformingMode();
+    renderSetlist();
+    renderCcliLog();
+  } catch (error) {
+    setSetlistStatus(error.message, true);
+    setCcliLogStatus(error.message, true);
+    applyPerformingMode();
+  } finally {
+    isUpdatingPerformance = false;
+    updateSetlistControls();
+  }
+}
+
+async function copyCcliLog() {
+  const logText = buildCcliLogText();
+  if (!logText) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(logText);
+  setCcliLogStatus("CCLI log copied");
+}
+
+async function clearCcliLog() {
+  isUpdatingPerformance = true;
+  updateSetlistControls();
+
+  try {
+    const response = await fetch("/api/performance-log", {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to clear CCLI log.");
+    }
+
+    performanceLog = data.performanceLog ?? null;
+    applyPerformingMode();
+    renderSetlist();
+    renderCcliLog();
+  } catch (error) {
+    setCcliLogStatus(error.message, true);
+  } finally {
+    isUpdatingPerformance = false;
+    updateSetlistControls();
+  }
 }
 
 async function finishPerformanceSet() {
-  stopPerformingMode();
+  await setPerformingMode(false);
   await saveSetlist([], "Clearing completed set...");
 }
 
 function applyState(state) {
   leaderCount.textContent = String(state.leaderCount);
   userCount.textContent = String(state.userCount);
+  performanceLog = state.performanceLog ?? performanceLog;
+  applyPerformingMode();
+  renderCcliLog();
   if (Array.isArray(state.setList)) {
     setList = state.setList;
     renderSetlist();
@@ -1236,11 +1415,23 @@ setlistClearButton.addEventListener("click", () => {
   saveSetlist([], "Clearing set list...");
 });
 
-setlistPerformingToggle.checked = window.localStorage.getItem(PERFORMING_STORAGE_KEY) === "true";
 applyPerformingMode();
 setlistPerformingToggle.addEventListener("change", () => {
-  window.localStorage.setItem(PERFORMING_STORAGE_KEY, String(setlistPerformingToggle.checked));
-  applyPerformingMode();
+  setPerformingMode(setlistPerformingToggle.checked).catch((error) => {
+    setCcliLogStatus(error.message, true);
+  });
+});
+
+copyCcliLogButton.addEventListener("click", () => {
+  copyCcliLog().catch((error) => {
+    setCcliLogStatus(error.message, true);
+  });
+});
+
+clearCcliLogButton.addEventListener("click", () => {
+  clearCcliLog().catch((error) => {
+    setCcliLogStatus(error.message, true);
+  });
 });
 
 editModeButton.addEventListener("click", () => {
