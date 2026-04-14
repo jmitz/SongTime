@@ -838,6 +838,7 @@ body.performing-mode .setlist-pill {
 }
 
 .editor-form,
+.import-panel,
 .editor-sections,
 .sections-container {
   display: grid;
@@ -896,6 +897,27 @@ body.performing-mode .setlist-pill {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(76, 54, 31, 0.08);
+}
+
+.import-panel {
+  padding: 20px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(76, 54, 31, 0.08);
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.import-status {
+  margin: 0;
+}
+
+#import-source-input {
+  min-height: 240px;
+  font-family: var(--mono);
 }
 
 .pill-error {

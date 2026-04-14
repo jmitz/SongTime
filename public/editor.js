@@ -10,6 +10,11 @@ const songAuthorsInput = document.getElementById("song-authors-input");
 const songCcliInput = document.getElementById("song-ccli-input");
 const songInitialInput = document.getElementById("song-initial-input");
 const sectionOrderInput = document.getElementById("section-order-input");
+const importFormatSelect = document.getElementById("import-format-select");
+const importFileInput = document.getElementById("import-file-input");
+const importSourceInput = document.getElementById("import-source-input");
+const importSongButton = document.getElementById("import-song-button");
+const importStatus = document.getElementById("import-status");
 const sectionsContainer = document.getElementById("sections-container");
 const saveSongButton = document.getElementById("save-song-button");
 const deleteSongButton = document.getElementById("delete-song-button");
@@ -42,6 +47,11 @@ function updateSaveButtonState() {
   saveSongButton.disabled = !hasPendingEdits;
 }
 
+function setImportStatus(message, isError = false) {
+  importStatus.textContent = message;
+  importStatus.classList.toggle("pill-error", isError);
+}
+
 function resetDirtyState(status = "Ready") {
   hasPendingEdits = false;
   setStatus(status);
@@ -56,6 +66,271 @@ function markPendingEdits() {
   hasPendingEdits = true;
   setStatus("Pending edits");
   updateSaveButtonState();
+}
+
+function isChordToken(token) {
+  return /^[A-G](#|b)?(m|maj|min|sus|aug|dim|add)?\d*(\/[A-G](#|b)?)?$/.test(token);
+}
+
+function looksLikeChordLine(line) {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  const chordTokens = tokens.filter(isChordToken).length;
+  return chordTokens > 0 && chordTokens / tokens.length >= 0.6;
+}
+
+function insertInlineChords(chordLine, lyricLine) {
+  const chordMatches = [...chordLine.matchAll(/\S+/g)].filter((match) => isChordToken(match[0]));
+  if (chordMatches.length === 0) {
+    return lyricLine;
+  }
+
+  const chordIndent = chordLine.match(/^ */)?.[0].length || 0;
+  const lyricIndent = lyricLine.match(/^ */)?.[0].length || 0;
+  const alignmentOffset = chordIndent - lyricIndent;
+  let result = "";
+  let cursor = 0;
+
+  for (const match of chordMatches) {
+    const insertAt = Math.max(
+      cursor,
+      Math.min((match.index ?? 0) - alignmentOffset, lyricLine.length),
+    );
+    result += lyricLine.slice(cursor, insertAt);
+    result += `[${match[0]}]`;
+    cursor = insertAt;
+  }
+
+  result += lyricLine.slice(cursor);
+  return result;
+}
+
+function trimBlankLines(lines) {
+  const trimmedLines = [...lines];
+
+  while (trimmedLines[0] === "") {
+    trimmedLines.shift();
+  }
+
+  while (trimmedLines[trimmedLines.length - 1] === "") {
+    trimmedLines.pop();
+  }
+
+  return trimmedLines;
+}
+
+function parseSectionHeader(line) {
+  const match = line.trim().match(/^\[([^[\]]+)\]$/);
+  if (!match) {
+    return null;
+  }
+
+  const label = match[1].trim();
+  if (!label || isChordToken(label)) {
+    return null;
+  }
+
+  return label;
+}
+
+function buildFallbackSectionId(label) {
+  const compact = label
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .trim();
+
+  if (!compact) {
+    return "S";
+  }
+
+  const initials = compact
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("");
+
+  return initials || compact.replace(/\s+/g, "");
+}
+
+function getBaseSectionId(label, unlabeledCount) {
+  if (!label) {
+    return String(unlabeledCount + 1);
+  }
+
+  const normalized = label
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const numberedMatch = normalized.match(/^(verse|chorus|bridge|pre chorus|prechorus|intro|outro|ending|tag|refrain|interlude)\s*(\d+)?$/);
+  const sectionNumber = numberedMatch?.[2] || "";
+
+  if (numberedMatch) {
+    const prefixMap = {
+      verse: "",
+      chorus: "C",
+      bridge: "B",
+      "pre chorus": "P",
+      prechorus: "P",
+      intro: "I",
+      outro: "E",
+      ending: "E",
+      tag: "T",
+      refrain: "R",
+      interlude: "N",
+    };
+    const prefix = prefixMap[numberedMatch[1]];
+
+    if (!prefix) {
+      return sectionNumber || String(unlabeledCount + 1);
+    }
+
+    if (!sectionNumber || sectionNumber === "1") {
+      return prefix;
+    }
+
+    return `${prefix}${sectionNumber}`;
+  }
+
+  return buildFallbackSectionId(label);
+}
+
+function makeUniqueSectionId(baseId, sections) {
+  if (!sections[baseId]) {
+    return baseId;
+  }
+
+  let suffix = 2;
+  let candidate = `${baseId}_${suffix}`;
+  while (sections[candidate]) {
+    suffix += 1;
+    candidate = `${baseId}_${suffix}`;
+  }
+
+  return candidate;
+}
+
+function normalizeUltimateGuitarSection(lines) {
+  const mergedLines = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].replace(/\s+$/, "");
+    if (line.trim() === "") {
+      if (mergedLines[mergedLines.length - 1] !== "") {
+        mergedLines.push("");
+      }
+      continue;
+    }
+
+    if (looksLikeChordLine(line)) {
+      const nextLine = lines[index + 1]?.replace(/\s+$/, "") ?? "";
+      if (
+        nextLine.trim() !== "" &&
+        !looksLikeChordLine(nextLine) &&
+        !parseSectionHeader(nextLine)
+      ) {
+        mergedLines.push(insertInlineChords(line, nextLine));
+        index += 1;
+        continue;
+      }
+
+      mergedLines.push(
+        line
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((token) => (isChordToken(token) ? `[${token}]` : token))
+          .join(" "),
+      );
+      continue;
+    }
+
+    mergedLines.push(line);
+  }
+
+  return trimBlankLines(mergedLines).join("\n");
+}
+
+function parseUltimateGuitarImport(source) {
+  const normalized = String(source || "").replace(/\r\n?/g, "\n").trim();
+  if (!normalized) {
+    throw new Error("Paste Ultimate Guitar text or choose a file to import.");
+  }
+
+  const blocks = [];
+  let currentBlock = { label: null, lines: [] };
+
+  function pushCurrentBlock() {
+    if (currentBlock.lines.length === 0) {
+      return;
+    }
+
+    blocks.push(currentBlock);
+  }
+
+  for (const rawLine of normalized.split("\n")) {
+    const header = parseSectionHeader(rawLine);
+    if (header) {
+      pushCurrentBlock();
+      currentBlock = { label: header, lines: [] };
+      continue;
+    }
+
+    currentBlock.lines.push(rawLine);
+  }
+
+  pushCurrentBlock();
+
+  if (blocks.length === 0) {
+    throw new Error("No importable lyrics were found in that Ultimate Guitar text.");
+  }
+
+  const sections = {};
+  const sectionOrder = [];
+  let unlabeledCount = 0;
+
+  for (const block of blocks) {
+    const content = normalizeUltimateGuitarSection(block.lines);
+    if (!content) {
+      continue;
+    }
+
+    const baseId = getBaseSectionId(block.label, unlabeledCount);
+    if (!block.label) {
+      unlabeledCount += 1;
+    }
+
+    let sectionId = baseId;
+    if (sections[sectionId]?.content && sections[sectionId].content !== content) {
+      sectionId = makeUniqueSectionId(baseId, sections);
+    }
+
+    if (!sections[sectionId]) {
+      sections[sectionId] = { content };
+    }
+
+    sectionOrder.push(sectionId);
+  }
+
+  if (sectionOrder.length === 0) {
+    throw new Error("No importable song sections were found in that Ultimate Guitar text.");
+  }
+
+  return {
+    sections,
+    sectionOrder,
+  };
+}
+
+function applyImportedSongData(importedSong) {
+  dirtyTrackingSuspended = true;
+  sectionOrderInput.value = importedSong.sectionOrder.join(", ");
+  populateSections(importedSong.sections);
+  dirtyTrackingSuspended = false;
+  markPendingEdits();
 }
 
 function createSectionRow(sectionId = "", content = "") {
@@ -256,6 +531,36 @@ newSongButton.addEventListener("click", () => {
 addSectionButton.addEventListener("click", () => {
   sectionsContainer.append(createSectionRow("", ""));
   markPendingEdits();
+});
+
+importFileInput.addEventListener("change", async () => {
+  const [file] = importFileInput.files || [];
+  if (!file) {
+    return;
+  }
+
+  try {
+    importSourceInput.value = await file.text();
+    setImportStatus(`Loaded ${file.name}. Review the text, then import it into the editor.`);
+  } catch (error) {
+    setImportStatus(error.message || "Unable to read that file.", true);
+  }
+});
+
+importSongButton.addEventListener("click", () => {
+  try {
+    if (importFormatSelect.value !== "ultimate-guitar") {
+      throw new Error("That import format is not available yet.");
+    }
+
+    const importedSong = parseUltimateGuitarImport(importSourceInput.value);
+    applyImportedSongData(importedSong);
+    setImportStatus(
+      `Imported ${Object.keys(importedSong.sections).length} section(s). Section order: ${importedSong.sectionOrder.join(", ")}.`,
+    );
+  } catch (error) {
+    setImportStatus(error.message, true);
+  }
 });
 
 deleteSongButton.addEventListener("click", async () => {

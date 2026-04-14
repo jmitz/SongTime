@@ -1,5 +1,7 @@
 ## SongList To Dos
 
+[] Import song with SongSelect format to system.
+
 [] Add something that shows there is a set list available and allows the leader to start the set list.
 
 [] When in the set list playing setting make the up and down keys move to the next or previous songs.
@@ -8,13 +10,16 @@
 
 [] Remove the extraneous wording on the pages.
 
-[] Keep track of played songs during an event and build a CCLI log to be used for CCLI reporting.
-
 [] Keep track of the popularity of requested songs
 
 [] Generate a random song picker.
 
 ## Completed
+
+[X] Keep track of played songs during an event and build a CCLI log to be used for CCLI reporting.
+
+[X] On the Leader page change the Edit Chords check box to a button and add an x in the upper right corner of the Chord Edit dialog to stop editting.
+
 [X] In the Leader pagte Remove the Build Set List dialog and button and add a button to add the current song to set list.
 
 [X] Build a system that allows the audience to pick and suggest songs from the User page and adds user selections to the current set list. The pick dialog should be opened by a pill next to the Show Chords pill. The pick dialog should open over the current User page on the right side of the screen. List only songs that have the initial and chordPlay settings as true.
@@ -35,3 +40,5 @@
    - Pending edits
 
 [X] Check how the Delete works. Minimize the chance that something will be deleted accidentally.
+
+[X] Import song with Ultimate Guitare format to system.

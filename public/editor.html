@@ -76,6 +76,52 @@
             />
           </label>
 
+          <section class="import-panel">
+            <div class="editor-sections-header">
+              <div>
+                <h3>Import</h3>
+                <p class="muted">Paste an export or choose a file to fill the editor with parsed sections.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Format</span>
+              <select id="import-format-select">
+                <option value="ultimate-guitar">Ultimate Guitar</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Import file</span>
+              <input id="import-file-input" type="file" accept=".txt,.crd,.chopro,text/plain" />
+            </label>
+
+            <label class="field">
+              <span>Source text</span>
+              <textarea
+                id="import-source-input"
+                rows="12"
+                placeholder="[Verse 1]
+G            C
+Amazing grace...
+
+[Chorus]
+D
+How sweet the sound..."
+              ></textarea>
+            </label>
+
+            <div class="import-actions">
+              <button id="import-song-button" class="button button-secondary" type="button">
+                Import into editor
+              </button>
+            </div>
+
+            <p id="import-status" class="muted import-status">
+              Import updates the current form and keeps the title, author, and CCLI fields as they are.
+            </p>
+          </section>
+
           <section class="editor-sections">
             <div class="editor-sections-header">
               <div>
