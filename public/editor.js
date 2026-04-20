@@ -2,6 +2,7 @@ const songList = document.getElementById("song-list");
 const songSearch = document.getElementById("song-search");
 const newSongButton = document.getElementById("new-song-button");
 const saveStatus = document.getElementById("save-status");
+const editorModeLabel = document.getElementById("editor-mode-label");
 const editorTitle = document.getElementById("editor-title");
 const songForm = document.getElementById("song-form");
 const initialFilterInput = document.getElementById("initial-filter-input");
@@ -10,6 +11,7 @@ const songAuthorsInput = document.getElementById("song-authors-input");
 const songCcliInput = document.getElementById("song-ccli-input");
 const songInitialInput = document.getElementById("song-initial-input");
 const sectionOrderInput = document.getElementById("section-order-input");
+const importPanel = document.getElementById("import-panel");
 const importFormatSelect = document.getElementById("import-format-select");
 const importFileInput = document.getElementById("import-file-input");
 const importSourceInput = document.getElementById("import-source-input");
@@ -25,6 +27,8 @@ let activeSongId = null;
 let activeSong = null;
 let dirtyTrackingSuspended = false;
 let hasPendingEdits = false;
+const defaultImportStatus =
+  "Import updates the current form and keeps the title, author, and CCLI fields as they are.";
 
 function getSongStatusTone(song) {
   if (!song?.audit?.initial) {
@@ -50,6 +54,19 @@ function updateSaveButtonState() {
 function setImportStatus(message, isError = false) {
   importStatus.textContent = message;
   importStatus.classList.toggle("pill-error", isError);
+}
+
+function resetImportState() {
+  importFormatSelect.value = "ultimate-guitar";
+  importFileInput.value = "";
+  importSourceInput.value = "";
+  setImportStatus(defaultImportStatus);
+}
+
+function updateEditorMode() {
+  const isNewSong = activeSongId == null;
+  editorModeLabel.textContent = isNewSong ? "Add Song" : "Edit Song";
+  importPanel.hidden = !isNewSong;
 }
 
 function resetDirtyState(status = "Ready") {
@@ -398,6 +415,8 @@ function setFormSong(song) {
   dirtyTrackingSuspended = true;
   activeSong = song ?? null;
   activeSongId = song?.id ?? null;
+  updateEditorMode();
+  resetImportState();
   editorTitle.textContent = song?.title || "New song";
   songTitleInput.value = song?.title || "";
   songAuthorsInput.value = song?.authors || "";

@@ -906,6 +906,10 @@ body.performing-mode .setlist-pill {
   border: 1px solid rgba(76, 54, 31, 0.08);
 }
 
+.import-panel[hidden] {
+  display: none;
+}
+
 .import-actions {
   display: flex;
   justify-content: flex-start;
