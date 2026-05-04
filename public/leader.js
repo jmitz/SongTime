@@ -633,22 +633,31 @@ function renderAllSections(song) {
   return fragment;
 }
 
-function renderLiveSection(section, title, className = "") {
+function renderLiveSection(
+  section,
+  title,
+  className = "",
+  { showHeading = true, showSectionName = true } = {},
+) {
   const card = document.createElement("section");
   card.className = "leader-live-section";
   if (className) {
     card.classList.add(className);
   }
 
-  const heading = document.createElement("p");
-  heading.className = "leader-live-section-heading";
-  heading.textContent = title;
-  card.append(heading);
+  if (showHeading) {
+    const heading = document.createElement("p");
+    heading.className = "leader-live-section-heading";
+    heading.textContent = title;
+    card.append(heading);
+  }
 
-  const sectionName = document.createElement("h3");
-  sectionName.className = "leader-live-section-name";
-  sectionName.textContent = formatSectionLabel(section);
-  card.append(sectionName);
+  if (showSectionName) {
+    const sectionName = document.createElement("h3");
+    sectionName.className = "leader-live-section-name";
+    sectionName.textContent = formatSectionLabel(section);
+    card.append(sectionName);
+  }
 
   const body = document.createElement("div");
   body.className = "leader-live-section-body";
@@ -675,7 +684,12 @@ function renderSong(song, section) {
     ensureDraftForCurrentSection();
     songContent.replaceChildren(renderAllSections(song));
   } else {
-    const currentSectionCard = renderLiveSection(section, "Current Section", "leader-live-section-current");
+    const currentSectionCard = renderLiveSection(
+      section,
+      "Current Section",
+      "leader-live-section-current",
+      { showHeading: false, showSectionName: false },
+    );
     const nextSection = getNextSection(song, currentSectionIndex);
 
     if (nextSection) {
