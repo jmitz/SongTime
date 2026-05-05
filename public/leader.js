@@ -26,6 +26,7 @@ const insertChordButton = document.getElementById("insert-chord-button");
 const deleteChordButton = document.getElementById("delete-chord-button");
 const saveChordsButton = document.getElementById("save-chords-button");
 const resetChordsButton = document.getElementById("reset-chords-button");
+const songStage = document.querySelector(".song-stage");
 
 let socket;
 let suppressScrollBroadcast = false;
@@ -53,6 +54,9 @@ let isUpdatingPerformance = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
 const MAX_LEADER_SECTION_LINES = 6;
+const MIN_SWIPE_DISTANCE = 48;
+const MAX_SWIPE_OFF_AXIS = 42;
+let swipeState = null;
 
 function getSongStatusColor(song) {
   if (!song?.audit?.initial) {
@@ -1321,6 +1325,142 @@ function changeSongSelection(step) {
   socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
 }
 
+function canTriggerLeaderNavigation() {
+  return !isEditModeEnabled() && socket && socket.readyState === WebSocket.OPEN;
+}
+
+function goToNextLeaderStep() {
+  if (!canTriggerLeaderNavigation()) {
+    return;
+  }
+
+  if (isPerformingMode() && currentSong?.sectionOrder?.length) {
+    const nextDisplay = getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, 1);
+    if (!nextDisplay) {
+      const nextSetlistSongId = getNextSetlistSongId();
+      if (nextSetlistSongId != null) {
+        goLiveToSong(nextSetlistSongId);
+        return;
+      }
+
+      finishPerformanceSet().catch((error) => {
+        setSetlistStatus(error.message, true);
+      });
+      return;
+    }
+  }
+
+  socket.send(JSON.stringify({ type: "next-section" }));
+}
+
+function goToPreviousLeaderStep() {
+  if (!canTriggerLeaderNavigation()) {
+    return;
+  }
+
+  if (isPerformingMode() && !getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, -1)) {
+    const previousSetlistSongId = getPreviousSetlistSongId();
+    if (previousSetlistSongId != null) {
+      goLiveToSong(previousSetlistSongId);
+      return;
+    }
+  }
+
+  socket.send(JSON.stringify({ type: "previous-section" }));
+}
+
+function goToNextSongSelection() {
+  if (!canTriggerLeaderNavigation()) {
+    return;
+  }
+
+  changeSongSelection(1);
+}
+
+function goToPreviousSongSelection() {
+  if (!canTriggerLeaderNavigation()) {
+    return;
+  }
+
+  changeSongSelection(-1);
+}
+
+function isSwipeTargetInteractive(target) {
+  return target instanceof Element && Boolean(target.closest("input, textarea, select, button, a, label"));
+}
+
+function clearSwipeState() {
+  swipeState = null;
+}
+
+function handleSwipeGesture(deltaX, deltaY) {
+  if (Math.abs(deltaY) > MAX_SWIPE_OFF_AXIS || Math.abs(deltaX) < MIN_SWIPE_DISTANCE) {
+    return;
+  }
+
+  if (deltaX < 0) {
+    goToNextLeaderStep();
+    return;
+  }
+
+  goToPreviousLeaderStep();
+}
+
+function handleSongStageTouchStart(event) {
+  if (isEditModeEnabled() || !songStage || event.touches.length !== 1 || isSwipeTargetInteractive(event.target)) {
+    clearSwipeState();
+    return;
+  }
+
+  const touch = event.touches[0];
+  swipeState = {
+    touchId: touch.identifier,
+    startX: touch.clientX,
+    startY: touch.clientY,
+  };
+}
+
+function handleSongStageTouchMove(event) {
+  if (!swipeState) {
+    return;
+  }
+
+  const touch = Array.from(event.touches).find((item) => item.identifier === swipeState.touchId);
+  if (!touch) {
+    clearSwipeState();
+    return;
+  }
+
+  const deltaX = touch.clientX - swipeState.startX;
+  const deltaY = touch.clientY - swipeState.startY;
+  if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < MIN_SWIPE_DISTANCE) {
+    return;
+  }
+
+  if (Math.abs(deltaY) <= MAX_SWIPE_OFF_AXIS) {
+    event.preventDefault();
+  } else {
+    clearSwipeState();
+  }
+}
+
+function handleSongStageTouchEnd(event) {
+  if (!swipeState) {
+    return;
+  }
+
+  const touch = Array.from(event.changedTouches).find((item) => item.identifier === swipeState.touchId);
+  if (!touch) {
+    clearSwipeState();
+    return;
+  }
+
+  const deltaX = touch.clientX - swipeState.startX;
+  const deltaY = touch.clientY - swipeState.startY;
+  clearSwipeState();
+  handleSwipeGesture(deltaX, deltaY);
+}
+
 function startDrag(event) {
   if (!isEditModeEnabled() || !draftSectionLines) {
     return;
@@ -1700,59 +1840,36 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
   if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
     event.preventDefault();
-
-    if (isPerformingMode() && currentSong?.sectionOrder?.length) {
-      const nextDisplay = getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, 1);
-      if (!nextDisplay) {
-        const nextSetlistSongId = getNextSetlistSongId();
-        if (nextSetlistSongId != null) {
-          goLiveToSong(nextSetlistSongId);
-          return;
-        }
-
-        finishPerformanceSet().catch((error) => {
-          setSetlistStatus(error.message, true);
-        });
-        return;
-      }
-    }
-
-    socket.send(JSON.stringify({ type: "next-section" }));
+    goToNextLeaderStep();
     return;
   }
 
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-
-    if (isPerformingMode() && !getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, -1)) {
-      const previousSetlistSongId = getPreviousSetlistSongId();
-      if (previousSetlistSongId != null) {
-        goLiveToSong(previousSetlistSongId);
-        return;
-      }
-    }
-
-    socket.send(JSON.stringify({ type: "previous-section" }));
+    goToPreviousLeaderStep();
     return;
   }
 
   if (event.key === "ArrowDown") {
     event.preventDefault();
-    changeSongSelection(1);
+    goToNextSongSelection();
     return;
   }
 
   if (event.key === "ArrowUp") {
     event.preventDefault();
-    changeSongSelection(-1);
+    goToPreviousSongSelection();
   }
 });
+
+if (songStage) {
+  songStage.addEventListener("touchstart", handleSongStageTouchStart, { passive: true });
+  songStage.addEventListener("touchmove", handleSongStageTouchMove, { passive: false });
+  songStage.addEventListener("touchend", handleSongStageTouchEnd, { passive: true });
+  songStage.addEventListener("touchcancel", clearSwipeState, { passive: true });
+}
 
 window.addEventListener("scroll", () => {
   if (isEditModeEnabled() || suppressScrollBroadcast || !socket || socket.readyState !== WebSocket.OPEN) {
