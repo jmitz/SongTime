@@ -11,17 +11,34 @@
       <main class="song-stage">
         <header class="song-header">
           <div>
-            <p class="eyebrow">Audience View</p>
             <h1 id="song-title">Loading...</h1>
             <p id="song-meta" class="song-meta"></p>
             <p id="section-label" class="section-label">Section</p>
           </div>
           <div class="user-toolbar">
-            <button id="open-pick-panel-button" class="pill pill-button" type="button">Pick songs</button>
-            <label class="toggle">
-              <input id="show-chords" type="checkbox" />
-              <span>Show chords</span>
-            </label>
+            <div class="user-menu-shell">
+              <button
+                id="open-user-menu-button"
+                class="button button-secondary user-menu-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="user-menu-panel"
+                aria-label="Open audience options"
+              >
+                <span class="user-menu-button-lines" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+              </button>
+              <div id="user-menu-panel" class="user-menu-panel" hidden>
+                <button id="open-pick-panel-button" class="pill pill-button" type="button">Pick songs</button>
+                <label class="toggle">
+                  <input id="show-chords" type="checkbox" />
+                  <span>Show chords</span>
+                </label>
+              </div>
+            </div>
             <div class="pill" id="connection-status">Connecting...</div>
           </div>
         </header>

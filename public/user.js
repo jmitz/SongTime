@@ -3,6 +3,8 @@ const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const connectionStatus = document.getElementById("connection-status");
+const openUserMenuButton = document.getElementById("open-user-menu-button");
+const userMenuPanel = document.getElementById("user-menu-panel");
 const showChordsToggle = document.getElementById("show-chords");
 const openPickPanelButton = document.getElementById("open-pick-panel-button");
 const userPickPanel = document.getElementById("user-pick-panel");
@@ -17,6 +19,7 @@ let currentSong = null;
 let currentSection = null;
 let setList = [];
 let eligiblePickSongs = [];
+let isUserMenuOpen = false;
 let isPickPanelOpen = false;
 let isSubmittingPick = false;
 
@@ -102,6 +105,35 @@ function toLyricsOnly(content) {
     .replace(/ +\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function getLongestLyricLineLength(content) {
+  return String(content || "")
+    .split("\n")
+    .reduce((maxLength, line) => Math.max(maxLength, line.trimEnd().length), 0);
+}
+
+function updateChordlessLayout(content = songContent.textContent || "") {
+  if (getShowChords()) {
+    songContent.style.removeProperty("--user-lyrics-font-size");
+    songContent.style.removeProperty("--user-lyrics-max-width");
+    return;
+  }
+
+  // Reset the lyric block to the full stage width before measuring so repeated
+  // updates do not compound a previously shrunken max-width.
+  songContent.style.setProperty("--user-lyrics-max-width", "100%");
+  const longestLineLength = Math.max(getLongestLyricLineLength(content), 1);
+  const horizontalPadding = 48;
+  const stageWidth = songContent.parentElement?.clientWidth || songContent.clientWidth || window.innerWidth;
+  const availableWidth = Math.max(stageWidth - horizontalPadding, 240);
+  const estimatedCharacterWidth = 0.56;
+  const fontSizePx = Math.max(
+    22,
+    Math.min(availableWidth / (longestLineLength * estimatedCharacterWidth), 60),
+  );
+
+  songContent.style.setProperty("--user-lyrics-font-size", `${fontSizePx}px`);
 }
 
 function parseChordSegments(line) {
@@ -221,11 +253,16 @@ function renderSong(song, section) {
   if (getShowChords()) {
     songContent.replaceChildren(renderChordContent(section?.content || ""));
   } else {
-    songContent.textContent = toLyricsOnly(section?.content || "");
+    const lyricsOnly = toLyricsOnly(section?.content || "");
+    songContent.textContent = lyricsOnly;
+    updateChordlessLayout(lyricsOnly);
   }
 
   songContent.classList.toggle("with-chords", getShowChords());
   songContent.classList.toggle("with-inline-chords", getShowChords());
+  if (getShowChords()) {
+    updateChordlessLayout("");
+  }
 }
 
 function applyScroll(scrollRatio) {
@@ -244,6 +281,21 @@ function setStatus(text) {
 function setPickStatus(text, isError = false) {
   pickPanelStatus.textContent = text;
   pickPanelStatus.classList.toggle("pill-error", isError);
+}
+
+function applyUserMenuVisibility() {
+  userMenuPanel.hidden = !isUserMenuOpen;
+  openUserMenuButton.setAttribute("aria-expanded", String(isUserMenuOpen));
+}
+
+function openUserMenu() {
+  isUserMenuOpen = true;
+  applyUserMenuVisibility();
+}
+
+function closeUserMenu() {
+  isUserMenuOpen = false;
+  applyUserMenuVisibility();
 }
 
 function isSongAlreadyPicked(songId) {
@@ -394,7 +446,24 @@ showChordsToggle.addEventListener("change", () => {
   }
 });
 
+window.addEventListener("resize", () => {
+  if (currentSong && currentSection && !getShowChords()) {
+    updateChordlessLayout();
+  }
+});
+
+openUserMenuButton.addEventListener("click", () => {
+  if (isUserMenuOpen) {
+    closeUserMenu();
+    return;
+  }
+
+  openUserMenu();
+});
+
 openPickPanelButton.addEventListener("click", () => {
+  closeUserMenu();
+
   if (isPickPanelOpen) {
     closePickPanel();
     return;
@@ -409,6 +478,22 @@ closePickPanelButton.addEventListener("click", () => {
 
 pickSongSearch.addEventListener("input", () => {
   renderPickSongList();
+});
+
+document.addEventListener("click", (event) => {
+  if (
+    isUserMenuOpen &&
+    !userMenuPanel.contains(event.target) &&
+    !openUserMenuButton.contains(event.target)
+  ) {
+    closeUserMenu();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeUserMenu();
+  }
 });
 
 function connect() {
