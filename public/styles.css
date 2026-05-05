@@ -35,6 +35,10 @@ body {
   min-height: 100vh;
 }
 
+body.user-page {
+  overflow: hidden;
+}
+
 .landing-page {
   display: grid;
   place-items: center;
@@ -386,6 +390,11 @@ body.performing-mode .setlist-pill {
   position: relative;
   min-height: calc(100vh - 40px);
   padding: 28px;
+}
+
+body.user-page .song-stage {
+  height: calc(100vh - 40px);
+  overflow: hidden;
 }
 
 .song-header {
@@ -764,6 +773,10 @@ body.performing-mode .setlist-pill {
   align-content: start;
 }
 
+body.user-page .user-content {
+  overflow: hidden;
+}
+
 .user-content:not(.with-chords) {
   font-size: var(--user-lyrics-font-size, clamp(1.35rem, 1rem + 3vw, 3.5rem));
   max-width: var(--user-lyrics-max-width, 100%);
@@ -794,6 +807,12 @@ body.performing-mode .setlist-pill {
   background: rgba(255, 252, 246, 0.96);
   box-shadow: 0 18px 42px rgba(69, 45, 17, 0.16);
   backdrop-filter: blur(12px);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.user-pick-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .user-pick-panel[hidden] {
