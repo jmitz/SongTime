@@ -115,6 +115,10 @@ function getLongestLyricLineLength(content) {
     .reduce((maxLength, line) => Math.max(maxLength, line.trimEnd().length), 0);
 }
 
+function getLyricLineCount(content) {
+  return Math.max(1, String(content || "").split("\n").length);
+}
+
 function splitSectionLines(lines, maxLines = MAX_SECTION_LINES) {
   const safeLines = Array.isArray(lines) ? lines : [];
   const limit = Math.max(1, maxLines);
@@ -175,14 +179,18 @@ function updateChordlessLayout(content = songContent.textContent || "") {
   // updates do not compound a previously shrunken max-width.
   songContent.style.setProperty("--user-lyrics-max-width", "100%");
   const longestLineLength = Math.max(getLongestLyricLineLength(content), 1);
+  const lineCount = getLyricLineCount(content);
   const horizontalPadding = 48;
+  const verticalPadding = 48;
+  const estimatedLineHeight = 1.8;
   const stageWidth = songContent.parentElement?.clientWidth || songContent.clientWidth || window.innerWidth;
   const availableWidth = Math.max(stageWidth - horizontalPadding, 240);
+  const contentTop = songContent.getBoundingClientRect().top;
+  const availableHeight = Math.max(window.innerHeight - contentTop - verticalPadding, 120);
   const estimatedCharacterWidth = 0.56;
-  const fontSizePx = Math.max(
-    22,
-    Math.min(availableWidth / (longestLineLength * estimatedCharacterWidth), 60),
-  );
+  const widthLimitedFontSize = availableWidth / (longestLineLength * estimatedCharacterWidth);
+  const heightLimitedFontSize = (availableHeight - verticalPadding) / (lineCount * estimatedLineHeight);
+  const fontSizePx = Math.max(16, Math.min(widthLimitedFontSize, heightLimitedFontSize, 60));
 
   songContent.style.setProperty("--user-lyrics-font-size", `${fontSizePx}px`);
 }

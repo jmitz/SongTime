@@ -768,6 +768,7 @@ body.performing-mode .setlist-pill {
   font-size: var(--user-lyrics-font-size, clamp(1.35rem, 1rem + 3vw, 3.5rem));
   max-width: var(--user-lyrics-max-width, 100%);
   width: 100%;
+  min-height: 0;
   margin-inline: auto;
   text-align: center;
 }
