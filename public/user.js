@@ -301,11 +301,7 @@ function renderSong(song, section) {
   const partContent = (currentPart?.lines || []).join("\n");
   songTitle.textContent = song.title;
   songMeta.textContent = formatSongMeta(song);
-  sectionLabel.textContent = formatSectionPartLabel(
-    formatSectionLabel(section),
-    currentSectionPartIndex + 1,
-    sectionParts.length,
-  );
+  sectionLabel.textContent = "";
 
   if (getShowChords()) {
     songContent.replaceChildren(renderChordContent(partContent));

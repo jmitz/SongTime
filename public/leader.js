@@ -759,16 +759,14 @@ function renderLiveSection(section, title, className = "", { showHeading = true,
     sectionParts.length,
   );
 
-  const shouldShowHeading = showHeading || sectionParts.length > 1;
-  if (shouldShowHeading) {
+  if (showHeading) {
     const heading = document.createElement("p");
     heading.className = "leader-live-section-heading";
     heading.textContent = title;
     card.append(heading);
   }
 
-  const shouldShowSectionName = showSectionName || sectionParts.length > 1;
-  if (shouldShowSectionName) {
+  if (showSectionName) {
     const sectionName = document.createElement("h3");
     sectionName.className = "leader-live-section-name";
     sectionName.textContent = sectionNameLabel;
