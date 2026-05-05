@@ -33,6 +33,7 @@ let selectedSongId = null;
 let currentSong = null;
 let currentSection = null;
 let currentSectionIndex = 0;
+let currentSectionPartIndex = 0;
 let isSaving = false;
 let draftSectionKey = null;
 let draftSectionLines = null;
@@ -51,6 +52,7 @@ let performanceLog = null;
 let isUpdatingPerformance = false;
 let draggedSetlistSongId = null;
 let suppressSetlistClickSongId = null;
+const MAX_LEADER_SECTION_LINES = 6;
 
 function getSongStatusColor(song) {
   if (!song?.audit?.initial) {
@@ -282,6 +284,111 @@ function parseChordContent(content) {
   return String(content || "").split("\n").map(parseChordLine);
 }
 
+function splitSectionLines(lines, maxLines = MAX_LEADER_SECTION_LINES) {
+  const safeLines = Array.isArray(lines) ? lines : [];
+  const limit = Math.max(1, maxLines);
+  const partCount = Math.max(1, Math.ceil(safeLines.length / limit));
+  const baseSize = Math.floor(safeLines.length / partCount);
+  const remainder = safeLines.length % partCount;
+  const parts = [];
+  let startIndex = 0;
+
+  for (let index = 0; index < partCount; index += 1) {
+    const size = baseSize + (index < remainder ? 1 : 0);
+    parts.push({
+      startIndex,
+      lines: safeLines.slice(startIndex, startIndex + size),
+    });
+    startIndex += size;
+  }
+
+  if (parts.length === 0) {
+    parts.push({
+      startIndex: 0,
+      lines: [],
+    });
+  }
+
+  return parts;
+}
+
+function formatSectionPartLabel(label, partNumber, totalParts) {
+  if (totalParts <= 1) {
+    return label;
+  }
+
+  return `${label} Part ${partNumber}`;
+}
+
+function getRenderedSectionLines(song, section, selected = false) {
+  const sectionKey = getCurrentSectionKey(song, section);
+  if (selected && draftSectionKey === sectionKey) {
+    return draftSectionLines;
+  }
+
+  return parseChordContent(section?.content || "");
+}
+
+function getSectionParts(section, song = currentSong, { selected = false } = {}) {
+  return splitSectionLines(getRenderedSectionLines(song, section, selected));
+}
+
+function clampSectionPartIndex(section = currentSection, song = currentSong) {
+  const sectionParts = getSectionParts(section, song);
+  currentSectionPartIndex = Math.max(0, Math.min(currentSectionPartIndex, sectionParts.length - 1));
+  return sectionParts;
+}
+
+function getCurrentSectionPart(section = currentSection, song = currentSong) {
+  const sectionParts = clampSectionPartIndex(section, song);
+  return {
+    sectionParts,
+    currentPart: sectionParts[currentSectionPartIndex] || sectionParts[0],
+  };
+}
+
+function getAdjacentSectionPart(song, sectionIndex, partIndex, direction) {
+  if (!song?.sectionOrder?.length) {
+    return null;
+  }
+
+  const step = direction >= 0 ? 1 : -1;
+  let targetSectionIndex = sectionIndex;
+  let targetPartIndex = partIndex + step;
+
+  while (targetSectionIndex >= 0 && targetSectionIndex < song.sectionOrder.length) {
+    const targetSection = getSectionById(song, song.sectionOrder[targetSectionIndex]);
+    if (!targetSection) {
+      return null;
+    }
+
+    const sectionParts = getSectionParts(targetSection, song);
+    if (targetPartIndex >= 0 && targetPartIndex < sectionParts.length) {
+      return {
+        section: targetSection,
+        sectionIndex: targetSectionIndex,
+        partIndex: targetPartIndex,
+        part: sectionParts[targetPartIndex],
+        partCount: sectionParts.length,
+      };
+    }
+
+    targetSectionIndex += step;
+    if (step > 0) {
+      targetPartIndex = 0;
+    } else {
+      if (targetSectionIndex < 0) {
+        break;
+      }
+      const previousSection = getSectionById(song, song.sectionOrder[targetSectionIndex]);
+      const previousParts = getSectionParts(previousSection, song);
+      targetPartIndex = previousParts.length - 1;
+    }
+  }
+
+  return null;
+}
+
 function serializeChordLine(line) {
   const lyrics = line?.lyrics || "";
   const chords = Array.isArray(line?.chords) ? [...line.chords] : [];
@@ -398,6 +505,7 @@ function setCurrentSectionById(sectionId) {
 
   currentSection = section;
   currentSectionIndex = Math.max(0, currentSong.sectionOrder.indexOf(sectionId));
+  currentSectionPartIndex = 0;
   ensureDraftForCurrentSection();
   insertMode = false;
   clearSelectedChord();
@@ -586,11 +694,11 @@ function createChordRow(line, lineIndex, editable, sectionId = "") {
   return row;
 }
 
-function renderChordContent(lines, editable = false, sectionId = "") {
+function renderChordContent(lines, editable = false, sectionId = "", lineOffset = 0) {
   const fragment = document.createDocumentFragment();
 
   lines.forEach((line, lineIndex) => {
-    fragment.append(createChordRow(line, lineIndex, editable, sectionId));
+    fragment.append(createChordRow(line, lineOffset + lineIndex, editable, sectionId));
   });
 
   return fragment;
@@ -605,63 +713,103 @@ function renderAllSections(song) {
       return;
     }
 
-    const sectionCard = document.createElement("section");
-    sectionCard.className = "leader-section-card";
-    sectionCard.dataset.sectionId = sectionId;
-
     const selected = currentSection?.id === sectionId;
-    if (selected) {
-      sectionCard.classList.add("leader-section-card-active");
-    }
+    const sectionParts = getSectionParts(section, song, { selected });
 
-    const heading = document.createElement("p");
-    heading.className = "leader-section-heading";
-    heading.textContent = formatSectionLabel(section);
-    sectionCard.append(heading);
+    sectionParts.forEach((part, partIndex) => {
+      const sectionCard = document.createElement("section");
+      sectionCard.className = "leader-section-card";
+      sectionCard.dataset.sectionId = sectionId;
+      if (selected) {
+        sectionCard.classList.add("leader-section-card-active");
+      }
 
-    const sectionBody = document.createElement("div");
-    sectionBody.className = "leader-section-body";
-    const sectionKey = getCurrentSectionKey(song, section);
-    const renderedLines =
-      selected && draftSectionKey === sectionKey ? draftSectionLines : parseChordContent(section.content || "");
-    sectionBody.append(renderChordContent(renderedLines, selected, sectionId));
-    sectionCard.append(sectionBody);
+      const heading = document.createElement("p");
+      heading.className = "leader-section-heading";
+      heading.textContent = formatSectionPartLabel(
+        formatSectionLabel(section),
+        partIndex + 1,
+        sectionParts.length,
+      );
+      sectionCard.append(heading);
 
-    fragment.append(sectionCard);
+      const sectionBody = document.createElement("div");
+      sectionBody.className = "leader-section-body";
+      sectionBody.append(renderChordContent(part.lines, selected, sectionId, part.startIndex));
+      sectionCard.append(sectionBody);
+
+      fragment.append(sectionCard);
+    });
   });
 
   return fragment;
 }
 
-function renderLiveSection(
-  section,
-  title,
-  className = "",
-  { showHeading = true, showSectionName = true } = {},
-) {
+function renderLiveSection(section, title, className = "", { showHeading = true, showSectionName = true } = {}) {
   const card = document.createElement("section");
   card.className = "leader-live-section";
   if (className) {
     card.classList.add(className);
   }
 
-  if (showHeading) {
+  const { currentPart, sectionParts } = getCurrentSectionPart(section);
+  const sectionNameLabel = formatSectionPartLabel(
+    formatSectionLabel(section),
+    currentSectionPartIndex + 1,
+    sectionParts.length,
+  );
+
+  const shouldShowHeading = showHeading || sectionParts.length > 1;
+  if (shouldShowHeading) {
     const heading = document.createElement("p");
     heading.className = "leader-live-section-heading";
     heading.textContent = title;
     card.append(heading);
   }
 
-  if (showSectionName) {
+  const shouldShowSectionName = showSectionName || sectionParts.length > 1;
+  if (shouldShowSectionName) {
     const sectionName = document.createElement("h3");
     sectionName.className = "leader-live-section-name";
-    sectionName.textContent = formatSectionLabel(section);
+    sectionName.textContent = sectionNameLabel;
     card.append(sectionName);
   }
 
   const body = document.createElement("div");
   body.className = "leader-live-section-body";
-  body.append(renderChordContent(parseChordContent(section?.content || ""), false, section?.id || ""));
+  body.append(renderChordContent(currentPart?.lines || [], false, section?.id || "", currentPart?.startIndex || 0));
+  card.append(body);
+
+  return card;
+}
+
+function renderQueuedLiveSection(section, title, className, partIndex) {
+  const sectionParts = getSectionParts(section);
+  const safePartIndex = Math.max(0, Math.min(partIndex, sectionParts.length - 1));
+  const part = sectionParts[safePartIndex] || sectionParts[0];
+  const card = document.createElement("section");
+  card.className = "leader-live-section";
+  if (className) {
+    card.classList.add(className);
+  }
+
+  const heading = document.createElement("p");
+  heading.className = "leader-live-section-heading";
+  heading.textContent = title;
+  card.append(heading);
+
+  const sectionName = document.createElement("h3");
+  sectionName.className = "leader-live-section-name";
+  sectionName.textContent = formatSectionPartLabel(
+    formatSectionLabel(section),
+    safePartIndex + 1,
+    sectionParts.length,
+  );
+  card.append(sectionName);
+
+  const body = document.createElement("div");
+  body.className = "leader-live-section-body";
+  body.append(renderChordContent(part?.lines || [], false, section?.id || "", part?.startIndex || 0));
   card.append(body);
 
   return card;
@@ -671,31 +819,35 @@ function renderSong(song, section) {
   selectedSongId = song.id;
   currentSong = song;
   currentSection = section;
+  const { sectionParts } = getCurrentSectionPart(section, song);
   songTitle.textContent = song.title;
   songMeta.textContent = formatSongMeta(song);
   sectionLabel.textContent = isEditModeEnabled()
     ? currentSection
       ? `Editing ${formatSectionLabel(currentSection)}`
       : "All sections"
-    : formatSectionLabel(section);
+    : formatSectionPartLabel(formatSectionLabel(section), currentSectionPartIndex + 1, sectionParts.length);
   songContent.classList.toggle("leader-content-editing", isEditModeEnabled());
 
   if (isEditModeEnabled()) {
     ensureDraftForCurrentSection();
     songContent.replaceChildren(renderAllSections(song));
   } else {
-    const currentSectionCard = renderLiveSection(
-      section,
-      "Current Section",
-      "leader-live-section-current",
-      { showHeading: false, showSectionName: false },
-    );
-    const nextSection = getNextSection(song, currentSectionIndex);
+    const currentSectionCard = renderLiveSection(section, "Current Section", "leader-live-section-current", {
+      showHeading: false,
+      showSectionName: false,
+    });
+    const nextDisplay = getAdjacentSectionPart(song, currentSectionIndex, currentSectionPartIndex, 1);
 
-    if (nextSection) {
+    if (nextDisplay) {
       songContent.replaceChildren(
         currentSectionCard,
-        renderLiveSection(nextSection, "Next Section", "leader-live-section-next"),
+        renderQueuedLiveSection(
+          nextDisplay.section,
+          nextDisplay.sectionIndex === currentSectionIndex ? "Next Part" : "Next Section",
+          "leader-live-section-next",
+          nextDisplay.partIndex,
+        ),
       );
     } else {
       songContent.replaceChildren(currentSectionCard);
@@ -1094,6 +1246,7 @@ function applyState(state) {
 
   const songChanged = currentSong?.id !== state.currentSong.id;
   currentSectionIndex = state.currentSectionIndex;
+  currentSectionPartIndex = Number.isInteger(state.currentSectionPartIndex) ? state.currentSectionPartIndex : 0;
 
   let nextSection = resolveSection(state.currentSong, state.currentSection, state.currentSectionIndex);
   if (isEditModeEnabled()) {
@@ -1557,8 +1710,8 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
 
     if (isPerformingMode() && currentSong?.sectionOrder?.length) {
-      const maxIndex = Math.max(0, currentSong.sectionOrder.length - 1);
-      if (currentSectionIndex >= maxIndex) {
+      const nextDisplay = getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, 1);
+      if (!nextDisplay) {
         const nextSetlistSongId = getNextSetlistSongId();
         if (nextSetlistSongId != null) {
           goLiveToSong(nextSetlistSongId);
@@ -1579,7 +1732,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") {
     event.preventDefault();
 
-    if (isPerformingMode() && currentSectionIndex <= 0) {
+    if (isPerformingMode() && !getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, -1)) {
       const previousSetlistSongId = getPreviousSetlistSongId();
       if (previousSetlistSongId != null) {
         goLiveToSong(previousSetlistSongId);

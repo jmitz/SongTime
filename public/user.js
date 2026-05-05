@@ -17,6 +17,7 @@ let socket;
 let allowScroll = true;
 let currentSong = null;
 let currentSection = null;
+let currentSectionPartIndex = 0;
 let setList = [];
 let eligiblePickSongs = [];
 let isUserMenuOpen = false;
@@ -25,6 +26,7 @@ let isSubmittingPick = false;
 
 const STORAGE_KEY = "songlist-show-chords";
 const PICK_PANEL_STORAGE_KEY = "songlist-user-pick-panel-open";
+const MAX_SECTION_LINES = 6;
 
 function getShowChords() {
   return showChordsToggle.checked;
@@ -111,6 +113,55 @@ function getLongestLyricLineLength(content) {
   return String(content || "")
     .split("\n")
     .reduce((maxLength, line) => Math.max(maxLength, line.trimEnd().length), 0);
+}
+
+function splitSectionLines(lines, maxLines = MAX_SECTION_LINES) {
+  const safeLines = Array.isArray(lines) ? lines : [];
+  const limit = Math.max(1, maxLines);
+  const partCount = Math.max(1, Math.ceil(safeLines.length / limit));
+  const baseSize = Math.floor(safeLines.length / partCount);
+  const remainder = safeLines.length % partCount;
+  const parts = [];
+  let startIndex = 0;
+
+  for (let index = 0; index < partCount; index += 1) {
+    const size = baseSize + (index < remainder ? 1 : 0);
+    parts.push({
+      startIndex,
+      lines: safeLines.slice(startIndex, startIndex + size),
+    });
+    startIndex += size;
+  }
+
+  if (parts.length === 0) {
+    parts.push({
+      startIndex: 0,
+      lines: [],
+    });
+  }
+
+  return parts;
+}
+
+function formatSectionPartLabel(label, partNumber, totalParts) {
+  if (totalParts <= 1) {
+    return label;
+  }
+
+  return `${label} Part ${partNumber}`;
+}
+
+function getSectionParts(section = currentSection) {
+  return splitSectionLines(String(section?.content || "").split("\n"));
+}
+
+function getCurrentSectionPart(section = currentSection) {
+  const sectionParts = getSectionParts(section);
+  currentSectionPartIndex = Math.max(0, Math.min(currentSectionPartIndex, sectionParts.length - 1));
+  return {
+    sectionParts,
+    currentPart: sectionParts[currentSectionPartIndex] || sectionParts[0],
+  };
 }
 
 function updateChordlessLayout(content = songContent.textContent || "") {
@@ -246,14 +297,20 @@ function renderChordContent(content) {
 function renderSong(song, section) {
   currentSong = song;
   currentSection = section;
+  const { currentPart, sectionParts } = getCurrentSectionPart(section);
+  const partContent = (currentPart?.lines || []).join("\n");
   songTitle.textContent = song.title;
   songMeta.textContent = formatSongMeta(song);
-  sectionLabel.textContent = formatSectionLabel(section);
+  sectionLabel.textContent = formatSectionPartLabel(
+    formatSectionLabel(section),
+    currentSectionPartIndex + 1,
+    sectionParts.length,
+  );
 
   if (getShowChords()) {
-    songContent.replaceChildren(renderChordContent(section?.content || ""));
+    songContent.replaceChildren(renderChordContent(partContent));
   } else {
-    const lyricsOnly = toLyricsOnly(section?.content || "");
+    const lyricsOnly = toLyricsOnly(partContent);
     songContent.textContent = lyricsOnly;
     updateChordlessLayout(lyricsOnly);
   }
@@ -512,6 +569,9 @@ function connect() {
         setList = message.payload.setList;
         renderPickSongList();
       }
+      currentSectionPartIndex = Number.isInteger(message.payload.currentSectionPartIndex)
+        ? message.payload.currentSectionPartIndex
+        : 0;
       renderSong(
         message.payload.currentSong,
         resolveSection(message.payload.currentSong, message.payload.currentSection, message.payload.currentSectionIndex),

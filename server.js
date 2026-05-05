@@ -23,10 +23,13 @@ if (repository.songs.length === 0) {
 const state = {
   currentSongId: repository.songs[0].id,
   currentSectionIndex: 0,
+  currentSectionPartIndex: 0,
   scrollRatio: 0,
   leaderCount: 0,
   userCount: 0,
 };
+
+const MAX_SECTION_LINES = 6;
 
 function getCurrentSong() {
   return repository.getSong(state.currentSongId) || repository.songs[0];
@@ -43,11 +46,24 @@ function getCurrentSection(song = getCurrentSong()) {
     : null;
 }
 
+function getSectionPartCount(section) {
+  const lineCount = String(section?.content || "").split("\n").length;
+  return Math.max(1, Math.ceil(lineCount / MAX_SECTION_LINES));
+}
+
+function clampCurrentSectionPartIndex(song = getCurrentSong()) {
+  const section = getCurrentSection(song);
+  const maxPartIndex = Math.max(0, getSectionPartCount(section) - 1);
+  state.currentSectionPartIndex = Math.max(0, Math.min(state.currentSectionPartIndex, maxPartIndex));
+}
+
 function serializeState() {
   const currentSong = getCurrentSong();
+  clampCurrentSectionPartIndex(currentSong);
   return {
     currentSongId: currentSong.id,
     currentSectionIndex: state.currentSectionIndex,
+    currentSectionPartIndex: state.currentSectionPartIndex,
     scrollRatio: state.scrollRatio,
     currentSong,
     currentSection: getCurrentSection(currentSong),
@@ -162,6 +178,7 @@ function handleSongMutation(req, res, saveSong) {
     if (song.id === state.currentSongId) {
       const maxIndex = Math.max(0, song.sectionOrder.length - 1);
       state.currentSectionIndex = Math.min(maxIndex, state.currentSectionIndex);
+      clampCurrentSectionPartIndex(song);
       broadcastState();
     }
 
@@ -279,6 +296,7 @@ app.delete("/api/songs/:id", (req, res) => {
       const fallbackSong = repository.songs[0];
       state.currentSongId = fallbackSong.id;
       state.currentSectionIndex = 0;
+      state.currentSectionPartIndex = 0;
       state.scrollRatio = 0;
       broadcastState();
     }
@@ -401,6 +419,7 @@ wss.on("connection", (socket) => {
       const songChanged = state.currentSongId !== song.id;
       state.currentSongId = song.id;
       state.currentSectionIndex = 0;
+      state.currentSectionPartIndex = 0;
       state.scrollRatio = 0;
       if (songChanged) {
         recordSongForActivePerformance(song.id);
@@ -411,15 +430,27 @@ wss.on("connection", (socket) => {
 
     if (message.type === "next-section") {
       const song = getCurrentSong();
-      const maxIndex = Math.max(0, song.sectionOrder.length - 1);
-      state.currentSectionIndex = Math.min(maxIndex, state.currentSectionIndex + 1);
+      const currentSection = getCurrentSection(song);
+      const currentPartCount = getSectionPartCount(currentSection);
+      if (state.currentSectionPartIndex < currentPartCount - 1) {
+        state.currentSectionPartIndex += 1;
+      } else {
+        const maxIndex = Math.max(0, song.sectionOrder.length - 1);
+        state.currentSectionIndex = Math.min(maxIndex, state.currentSectionIndex + 1);
+        state.currentSectionPartIndex = 0;
+      }
       state.scrollRatio = 0;
       broadcastState();
       return;
     }
 
     if (message.type === "previous-section") {
-      state.currentSectionIndex = Math.max(0, state.currentSectionIndex - 1);
+      if (state.currentSectionPartIndex > 0) {
+        state.currentSectionPartIndex -= 1;
+      } else {
+        state.currentSectionIndex = Math.max(0, state.currentSectionIndex - 1);
+        clampCurrentSectionPartIndex();
+      }
       state.scrollRatio = 0;
       broadcastState();
       return;
