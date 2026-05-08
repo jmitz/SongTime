@@ -36,7 +36,7 @@ function getCurrentSong() {
 }
 
 function getCurrentSection(song = getCurrentSong()) {
-  const sectionId = song.sectionOrder[state.currentSectionIndex] || song.sectionOrder[0];
+  const sectionId = song.sectionOrder[state.currentSectionIndex];
   return sectionId
     ? {
         id: sectionId,
@@ -436,8 +436,13 @@ wss.on("connection", (socket) => {
         state.currentSectionPartIndex += 1;
       } else {
         const maxIndex = Math.max(0, song.sectionOrder.length - 1);
-        state.currentSectionIndex = Math.min(maxIndex, state.currentSectionIndex + 1);
-        state.currentSectionPartIndex = 0;
+        if (state.currentSectionIndex < maxIndex) {
+          state.currentSectionIndex += 1;
+          state.currentSectionPartIndex = 0;
+        } else if (state.currentSectionIndex === maxIndex) {
+          state.currentSectionIndex = song.sectionOrder.length;
+          state.currentSectionPartIndex = 0;
+        }
       }
       state.scrollRatio = 0;
       broadcastState();

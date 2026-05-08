@@ -177,7 +177,7 @@ function resolveSection(song, section, sectionIndex = 0) {
   }
 
   if (song?.sections && song.sectionOrder?.length) {
-    const sectionId = song.sectionOrder[sectionIndex] || song.sectionOrder[0];
+    const sectionId = song.sectionOrder[sectionIndex];
     if (sectionId && song.sections[sectionId]) {
       return {
         id: sectionId,
@@ -821,9 +821,17 @@ function renderSong(song, section) {
   selectedSongId = song.id;
   currentSong = song;
   currentSection = section;
-  const { sectionParts } = getCurrentSectionPart(section, song);
   songTitle.textContent = song.title;
   songMeta.textContent = formatSongMeta(song);
+  if (!section) {
+    sectionLabel.textContent = "";
+    songContent.classList.toggle("leader-content-editing", false);
+    songContent.replaceChildren();
+    syncEditPanel();
+    return;
+  }
+
+  const { sectionParts } = getCurrentSectionPart(section, song);
   sectionLabel.textContent = isEditModeEnabled()
     ? currentSection
       ? `Editing ${formatSectionLabel(currentSection)}`
@@ -1254,7 +1262,7 @@ function applyState(state) {
   if (isEditModeEnabled()) {
     if (songChanged) {
       clearDraftsForSong(currentSong?.id);
-    } else if (currentSection?.id) {
+    } else if (nextSection && currentSection?.id) {
       nextSection = getSectionById(state.currentSong, currentSection.id) || nextSection;
     }
   }

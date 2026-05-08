@@ -38,7 +38,7 @@ function resolveSection(song, section, sectionIndex = 0) {
   }
 
   if (song?.sections && song.sectionOrder?.length) {
-    const sectionId = song.sectionOrder[sectionIndex] || song.sectionOrder[0];
+    const sectionId = song.sectionOrder[sectionIndex];
     if (sectionId && song.sections[sectionId]) {
       return {
         id: sectionId,
@@ -305,11 +305,21 @@ function renderChordContent(content) {
 function renderSong(song, section) {
   currentSong = song;
   currentSection = section;
-  const { currentPart, sectionParts } = getCurrentSectionPart(section);
-  const partContent = (currentPart?.lines || []).join("\n");
   songTitle.textContent = song.title;
   songMeta.textContent = formatSongMeta(song);
   sectionLabel.textContent = "";
+
+  if (!section) {
+    songContent.replaceChildren();
+    songContent.textContent = "";
+    songContent.classList.toggle("with-chords", getShowChords());
+    songContent.classList.toggle("with-inline-chords", getShowChords());
+    updateChordlessLayout("");
+    return;
+  }
+
+  const { currentPart } = getCurrentSectionPart(section);
+  const partContent = (currentPart?.lines || []).join("\n");
 
   if (getShowChords()) {
     songContent.replaceChildren(renderChordContent(partContent));
