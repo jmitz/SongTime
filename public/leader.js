@@ -4,11 +4,21 @@ const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
 const addCurrentSongButton = document.getElementById("add-current-song-button");
+const leaderPanelMenuButton = document.getElementById("leader-panel-menu-button");
+const leaderPanelMenu = document.getElementById("leader-panel-menu");
+const showSetlistPanelButton = document.getElementById("show-setlist-panel-button");
+const showCcliLogPanelButton = document.getElementById("show-ccli-log-panel-button");
+const showInfoPanelButton = document.getElementById("show-info-panel-button");
+const showSelectionPanelButton = document.getElementById("show-selection-panel-button");
+const leaderSelectionPanel = document.getElementById("leader-selection-panel");
+const leaderInfoPanel = document.getElementById("leader-info-panel");
+const setlistPanel = document.getElementById("setlist-panel");
 const setlistGenerateButton = document.getElementById("setlist-generate-button");
 const setlistClearButton = document.getElementById("setlist-clear-button");
 const setlistPerformingToggle = document.getElementById("setlist-performing-toggle");
 const setlistStatus = document.getElementById("setlist-status");
 const setlistList = document.getElementById("setlist-list");
+const ccliLogPanel = document.getElementById("ccli-log-panel");
 const ccliLogStatus = document.getElementById("ccli-log-status");
 const ccliLogList = document.getElementById("ccli-log-list");
 const copyCcliLogButton = document.getElementById("copy-ccli-log-button");
@@ -56,7 +66,17 @@ let suppressSetlistClickSongId = null;
 const MAX_LEADER_SECTION_LINES = 6;
 const MIN_SWIPE_DISTANCE = 48;
 const MAX_SWIPE_OFF_AXIS = 42;
+const LEADER_PANEL_STORAGE_KEY = "songlist-leader-panel";
 let swipeState = null;
+const storedLeaderPanel = window.localStorage.getItem(LEADER_PANEL_STORAGE_KEY);
+let activeLeaderPanel =
+  storedLeaderPanel === "ccli" ||
+  storedLeaderPanel === "info" ||
+  storedLeaderPanel === "selection" ||
+  storedLeaderPanel === "none"
+    ? storedLeaderPanel
+    : "setlist";
+let isLeaderPanelMenuOpen = false;
 
 function getSongStatusColor(song) {
   if (!song?.audit?.initial) {
@@ -82,6 +102,41 @@ function setSetlistStatus(message, isError = false) {
 function setCcliLogStatus(message, isError = false) {
   ccliLogStatus.textContent = message;
   ccliLogStatus.classList.toggle("pill-error", isError);
+}
+
+function applyLeaderPanelMenuVisibility() {
+  leaderPanelMenu.hidden = !isLeaderPanelMenuOpen;
+  leaderPanelMenuButton.setAttribute("aria-expanded", String(isLeaderPanelMenuOpen));
+}
+
+function closeLeaderPanelMenu() {
+  isLeaderPanelMenuOpen = false;
+  applyLeaderPanelMenuVisibility();
+}
+
+function setActiveLeaderPanel(panel) {
+  activeLeaderPanel =
+    panel === "ccli" || panel === "info" || panel === "selection" || panel === "none" ? panel : "setlist";
+  window.localStorage.setItem(LEADER_PANEL_STORAGE_KEY, activeLeaderPanel);
+  leaderSelectionPanel.hidden = activeLeaderPanel !== "selection";
+  leaderInfoPanel.hidden = activeLeaderPanel !== "info";
+  setlistPanel.hidden = activeLeaderPanel !== "setlist";
+  ccliLogPanel.hidden = activeLeaderPanel !== "ccli";
+  showSelectionPanelButton.classList.toggle(
+    "leader-panel-menu-item-active",
+    activeLeaderPanel === "selection",
+  );
+  showInfoPanelButton.classList.toggle("leader-panel-menu-item-active", activeLeaderPanel === "info");
+  showSetlistPanelButton.classList.toggle("leader-panel-menu-item-active", activeLeaderPanel === "setlist");
+  showCcliLogPanelButton.classList.toggle("leader-panel-menu-item-active", activeLeaderPanel === "ccli");
+  showSelectionPanelButton.setAttribute("aria-pressed", String(activeLeaderPanel === "selection"));
+  showInfoPanelButton.setAttribute("aria-pressed", String(activeLeaderPanel === "info"));
+  showSetlistPanelButton.setAttribute("aria-pressed", String(activeLeaderPanel === "setlist"));
+  showCcliLogPanelButton.setAttribute("aria-pressed", String(activeLeaderPanel === "ccli"));
+  showSelectionPanelButton.textContent = `${activeLeaderPanel === "selection" ? "✓ " : ""}Selection/Edit`;
+  showInfoPanelButton.textContent = `${activeLeaderPanel === "info" ? "✓ " : ""}Info`;
+  showSetlistPanelButton.textContent = `${activeLeaderPanel === "setlist" ? "✓ " : ""}Set List`;
+  showCcliLogPanelButton.textContent = `${activeLeaderPanel === "ccli" ? "✓ " : ""}CCLI Log`;
 }
 
 function getActiveSetlistIndex(songId = currentSong?.id) {
@@ -1720,6 +1775,34 @@ addCurrentSongButton.addEventListener("click", () => {
   addCurrentSongToSetlist();
 });
 
+applyLeaderPanelMenuVisibility();
+setActiveLeaderPanel(activeLeaderPanel);
+
+leaderPanelMenuButton.addEventListener("click", () => {
+  isLeaderPanelMenuOpen = !isLeaderPanelMenuOpen;
+  applyLeaderPanelMenuVisibility();
+});
+
+showSetlistPanelButton.addEventListener("click", () => {
+  setActiveLeaderPanel(activeLeaderPanel === "setlist" ? "none" : "setlist");
+  closeLeaderPanelMenu();
+});
+
+showCcliLogPanelButton.addEventListener("click", () => {
+  setActiveLeaderPanel(activeLeaderPanel === "ccli" ? "none" : "ccli");
+  closeLeaderPanelMenu();
+});
+
+showInfoPanelButton.addEventListener("click", () => {
+  setActiveLeaderPanel(activeLeaderPanel === "info" ? "none" : "info");
+  closeLeaderPanelMenu();
+});
+
+showSelectionPanelButton.addEventListener("click", () => {
+  setActiveLeaderPanel(activeLeaderPanel === "selection" ? "none" : "selection");
+  closeLeaderPanelMenu();
+});
+
 setlistGenerateButton.addEventListener("click", () => {
   generateSetlistFromCheckedSongs();
 });
@@ -1828,8 +1911,23 @@ songContent.addEventListener("click", (event) => {
   }
 });
 
+document.addEventListener("click", (event) => {
+  if (
+    isLeaderPanelMenuOpen &&
+    !leaderPanelMenu.contains(event.target) &&
+    !leaderPanelMenuButton.contains(event.target)
+  ) {
+    closeLeaderPanelMenu();
+  }
+});
+
 window.addEventListener("keydown", (event) => {
   if (event.repeat) {
+    return;
+  }
+
+  if (event.key === "Escape" && isLeaderPanelMenuOpen) {
+    closeLeaderPanelMenu();
     return;
   }
 
