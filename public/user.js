@@ -351,6 +351,7 @@ function setStatus(text) {
 
 function setPickStatus(text, isError = false) {
   pickPanelStatus.textContent = text;
+  pickPanelStatus.hidden = !text;
   pickPanelStatus.classList.toggle("pill-error", isError);
 }
 
@@ -475,7 +476,7 @@ async function loadPickableSongs() {
   }
 
   applyPickPayload(data);
-  setPickStatus(eligiblePickSongs.length > 0 ? "Choose a song to add to the set list" : "No audience-ready songs");
+  setPickStatus(eligiblePickSongs.length > 0 ? "" : "No audience-ready songs");
 }
 
 async function suggestSong(songId) {

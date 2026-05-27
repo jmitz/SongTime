@@ -797,22 +797,17 @@ body.user-page .user-content {
   right: 20px;
   z-index: 20;
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 16px;
   width: min(360px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
-  overflow: auto;
+  overflow: hidden;
   padding: 18px;
   border-radius: 20px;
   border: 1px solid rgba(76, 54, 31, 0.12);
   background: rgba(255, 252, 246, 0.96);
   box-shadow: 0 18px 42px rgba(69, 45, 17, 0.16);
   backdrop-filter: blur(12px);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.user-pick-panel::-webkit-scrollbar {
-  display: none;
 }
 
 .user-pick-panel[hidden] {
@@ -833,6 +828,15 @@ body.user-page .user-content {
 .user-pick-list {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.user-pick-list::-webkit-scrollbar {
+  display: none;
 }
 
 .user-pick-item {
