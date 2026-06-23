@@ -557,7 +557,7 @@ function connect() {
       applyScroll(message.payload.scrollRatio);
     }
 
-    if (message.type === "scroll") {
+    if (message.type === "scroll" && scrollSpeed > 0) {
       applyScroll(message.payload.scrollRatio);
     }
 

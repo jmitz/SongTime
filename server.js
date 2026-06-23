@@ -414,6 +414,7 @@ wss.on("connection", (socket) => {
       state.currentSectionIndex = 0;
       state.currentSectionPartIndex = 0;
       state.scrollRatio = 0;
+      state.scrollSpeed = 0;
       if (songChanged) {
         recordSongForActivePerformance(song.id);
       }
@@ -442,6 +443,10 @@ wss.on("connection", (socket) => {
     }
 
     if (message.type === "scroll" && typeof message.scrollRatio === "number") {
+      if (state.scrollSpeed <= 0) {
+        return;
+      }
+
       const scrollRatio = Math.max(0, Math.min(1, message.scrollRatio));
       state.scrollRatio = scrollRatio;
       broadcast({ type: "scroll", payload: { scrollRatio } });

@@ -199,7 +199,18 @@ function goLiveToSong(songId) {
   const normalizedSongId = String(songId);
   songSelect.value = normalizedSongId;
   syncSongSelectColor(normalizedSongId);
-  socket.send(JSON.stringify({ type: "set-song", songId: normalizedSongId }));
+  selectLiveSong(normalizedSongId);
+}
+
+function selectLiveSong(songId) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  setScrollSpeed(0);
+  lastScrollTimestamp = null;
+  socket.send(JSON.stringify({ type: "set-scroll-speed", scrollSpeed: 0 }));
+  socket.send(JSON.stringify({ type: "set-song", songId: String(songId) }));
 }
 
 function syncSongSelectColor(songId = songSelect.value) {
@@ -1401,7 +1412,7 @@ function connect() {
     }
 
     if (message.type === "scroll") {
-      if (!isEditModeEnabled()) {
+      if (!isEditModeEnabled() && scrollSpeed > 0) {
         applyScroll(message.payload.scrollRatio);
       }
     }
@@ -1436,7 +1447,7 @@ function changeSongSelection(step) {
   }
 
   songSelect.selectedIndex = nextIndex;
-  socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
+  selectLiveSong(songSelect.value);
 }
 
 function canTriggerLeaderNavigation() {
@@ -1818,7 +1829,7 @@ songSelect.addEventListener("change", () => {
     return;
   }
 
-  socket.send(JSON.stringify({ type: "set-song", songId: songSelect.value }));
+  selectLiveSong(songSelect.value);
 });
 
 addCurrentSongButton.addEventListener("click", () => {
