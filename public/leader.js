@@ -3,6 +3,7 @@ const songTitle = document.getElementById("song-title");
 const songMeta = document.getElementById("song-meta");
 const sectionLabel = document.getElementById("section-label");
 const songContent = document.getElementById("song-content");
+const scrollSpeedDisplay = document.getElementById("scroll-speed-display");
 const addCurrentSongButton = document.getElementById("add-current-song-button");
 const leaderPanelMenuButton = document.getElementById("leader-panel-menu-button");
 const leaderPanelMenu = document.getElementById("leader-panel-menu");
@@ -39,7 +40,9 @@ const resetChordsButton = document.getElementById("reset-chords-button");
 const songStage = document.querySelector(".song-stage");
 
 let socket;
-let suppressScrollBroadcast = false;
+let scrollSpeed = 0.015;
+let lastScrollTimestamp = null;
+let lastScrollBroadcastTimestamp = 0;
 let selectedSongId = null;
 let currentSong = null;
 let currentSection = null;
@@ -67,6 +70,8 @@ const MAX_LEADER_SECTION_LINES = 6;
 const MIN_SWIPE_DISTANCE = 48;
 const MAX_SWIPE_OFF_AXIS = 42;
 const LEADER_PANEL_STORAGE_KEY = "songlist-leader-panel";
+const SCROLL_SPEED_STEP = 0.005;
+const MAX_SCROLL_SPEED = 0.08;
 let swipeState = null;
 const storedLeaderPanel = window.localStorage.getItem(LEADER_PANEL_STORAGE_KEY);
 let activeLeaderPanel =
@@ -886,40 +891,52 @@ function renderSong(song, section) {
     return;
   }
 
-  const { sectionParts } = getCurrentSectionPart(section, song);
   sectionLabel.textContent = isEditModeEnabled()
     ? currentSection
       ? `Editing ${formatSectionLabel(currentSection)}`
       : "All sections"
-    : formatSectionPartLabel(formatSectionLabel(section), currentSectionPartIndex + 1, sectionParts.length);
+    : formatSectionLabel(section);
   songContent.classList.toggle("leader-content-editing", isEditModeEnabled());
 
   if (isEditModeEnabled()) {
     ensureDraftForCurrentSection();
     songContent.replaceChildren(renderAllSections(song));
   } else {
-    const currentSectionCard = renderLiveSection(section, "Current Section", "leader-live-section-current", {
-      showHeading: false,
-      showSectionName: false,
-    });
-    const nextDisplay = getAdjacentSectionPart(song, currentSectionIndex, currentSectionPartIndex, 1);
-
-    if (nextDisplay) {
-      songContent.replaceChildren(
-        currentSectionCard,
-        renderQueuedLiveSection(
-          nextDisplay.section,
-          nextDisplay.sectionIndex === currentSectionIndex ? "Next Part" : "Next Section",
-          "leader-live-section-next",
-          nextDisplay.partIndex,
-        ),
-      );
-    } else {
-      songContent.replaceChildren(currentSectionCard);
-    }
+    songContent.replaceChildren(renderLiveSong(song));
   }
 
   syncEditPanel();
+}
+
+function renderLiveSong(song) {
+  const fragment = document.createDocumentFragment();
+
+  song.sectionOrder.forEach((sectionId) => {
+    const section = getSectionById(song, sectionId);
+    if (!section) {
+      return;
+    }
+
+    const card = document.createElement("section");
+    card.className = "leader-live-section";
+    card.dataset.sectionId = sectionId;
+    if (currentSection?.id === sectionId) {
+      card.classList.add("leader-live-section-current");
+    }
+
+    const sectionName = document.createElement("h3");
+    sectionName.className = "leader-live-section-name";
+    sectionName.textContent = formatSectionLabel(section);
+    card.append(sectionName);
+
+    const body = document.createElement("div");
+    body.className = "leader-live-section-body";
+    body.append(renderChordContent(getRenderedSectionLines(song, section), false, sectionId));
+    card.append(body);
+    fragment.append(card);
+  });
+
+  return fragment;
 }
 
 function renderSongOptions(songs) {
@@ -1312,6 +1329,7 @@ function applyState(state) {
   const songChanged = currentSong?.id !== state.currentSong.id;
   currentSectionIndex = state.currentSectionIndex;
   currentSectionPartIndex = Number.isInteger(state.currentSectionPartIndex) ? state.currentSectionPartIndex : 0;
+  setScrollSpeed(state.scrollSpeed);
 
   let nextSection = resolveSection(state.currentSong, state.currentSection, state.currentSectionIndex);
   if (isEditModeEnabled()) {
@@ -1330,13 +1348,42 @@ function applyState(state) {
   }
 }
 
+function setScrollSpeed(nextSpeed) {
+  if (!Number.isFinite(nextSpeed)) {
+    return;
+  }
+
+  scrollSpeed = Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed));
+  scrollSpeedDisplay.textContent = `Scroll: ${(scrollSpeed * 100).toFixed(1)}%/sec · Up/Down: slower/faster`;
+}
+
 function applyScroll(scrollRatio) {
-  suppressScrollBroadcast = true;
-  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  window.scrollTo({ top: maxScroll * scrollRatio, behavior: "auto" });
-  window.setTimeout(() => {
-    suppressScrollBroadcast = false;
-  }, 50);
+  const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
+  songContent.scrollTop = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+}
+
+function sendScrollSpeed(nextSpeed) {
+  setScrollSpeed(nextSpeed);
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "set-scroll-speed", scrollSpeed }));
+  }
+}
+
+function animateSongScroll(timestamp) {
+  if (lastScrollTimestamp !== null && !isEditModeEnabled() && scrollSpeed > 0) {
+    const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
+    const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
+    if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
+      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + maxScroll * scrollSpeed * elapsedSeconds);
+      if (socket?.readyState === WebSocket.OPEN && timestamp - lastScrollBroadcastTimestamp >= 200) {
+        lastScrollBroadcastTimestamp = timestamp;
+        socket.send(JSON.stringify({ type: "scroll", scrollRatio: songContent.scrollTop / maxScroll }));
+      }
+    }
+  }
+
+  lastScrollTimestamp = timestamp;
+  window.requestAnimationFrame(animateSongScroll);
 }
 
 function connect() {
@@ -1357,6 +1404,10 @@ function connect() {
       if (!isEditModeEnabled()) {
         applyScroll(message.payload.scrollRatio);
       }
+    }
+
+    if (message.type === "scroll-speed") {
+      setScrollSpeed(message.payload.scrollSpeed);
     }
 
     if (message.type === "songs") {
@@ -1398,8 +1449,7 @@ function goToNextLeaderStep() {
   }
 
   if (isPerformingMode() && currentSong?.sectionOrder?.length) {
-    const nextDisplay = getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, 1);
-    if (!nextDisplay) {
+    if (currentSectionIndex >= currentSong.sectionOrder.length - 1) {
       const nextSetlistSongId = getNextSetlistSongId();
       if (nextSetlistSongId != null) {
         goLiveToSong(nextSetlistSongId);
@@ -1421,7 +1471,7 @@ function goToPreviousLeaderStep() {
     return;
   }
 
-  if (isPerformingMode() && !getAdjacentSectionPart(currentSong, currentSectionIndex, currentSectionPartIndex, -1)) {
+  if (isPerformingMode() && currentSectionIndex <= 0) {
     const previousSetlistSongId = getPreviousSetlistSongId();
     if (previousSetlistSongId != null) {
       goLiveToSong(previousSetlistSongId);
@@ -1966,13 +2016,13 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key === "ArrowUp") {
     event.preventDefault();
-    goToPreviousLeaderStep();
+    sendScrollSpeed(scrollSpeed - SCROLL_SPEED_STEP);
     return;
   }
 
   if (event.key === "ArrowDown") {
     event.preventDefault();
-    goToNextLeaderStep();
+    sendScrollSpeed(scrollSpeed + SCROLL_SPEED_STEP);
   }
 });
 
@@ -1982,16 +2032,6 @@ if (songStage) {
   songStage.addEventListener("touchend", handleSongStageTouchEnd, { passive: true });
   songStage.addEventListener("touchcancel", clearSwipeState, { passive: true });
 }
-
-window.addEventListener("scroll", () => {
-  if (isEditModeEnabled() || suppressScrollBroadcast || !socket || socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  const scrollRatio = Math.max(0, Math.min(1, window.scrollY / maxScroll));
-  socket.send(JSON.stringify({ type: "scroll", scrollRatio }));
-});
 
 window.addEventListener("resize", () => {
   invalidateCharacterWidth();
@@ -2039,3 +2079,6 @@ init().catch((error) => {
   songTitle.textContent = "Unable to load songs";
   songContent.textContent = error.message;
 });
+
+setScrollSpeed(scrollSpeed);
+window.requestAnimationFrame(animateSongScroll);

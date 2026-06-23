@@ -21,6 +21,7 @@ const sectionsContainer = document.getElementById("sections-container");
 const saveSongButton = document.getElementById("save-song-button");
 const deleteSongButton = document.getElementById("delete-song-button");
 const addSectionButton = document.getElementById("editor-add-section-button");
+const shutdownSystemButton = document.getElementById("shutdown-system-button");
 
 let songs = [];
 let activeSongId = null;
@@ -550,6 +551,32 @@ newSongButton.addEventListener("click", () => {
 addSectionButton.addEventListener("click", () => {
   sectionsContainer.append(createSectionRow("", ""));
   markPendingEdits();
+});
+
+shutdownSystemButton.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Shut down SongList and close the SQLite database? Connected leader and user pages will disconnect.",
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    shutdownSystemButton.disabled = true;
+    setStatus("Shutting down...");
+    const response = await fetch("/api/shutdown", {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to shut down the system.");
+    }
+
+    setStatus("System shutting down. SQLite database will be closed.");
+  } catch (error) {
+    shutdownSystemButton.disabled = false;
+    setStatus(error.message, true);
+  }
 });
 
 importFileInput.addEventListener("change", async () => {

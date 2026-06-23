@@ -14,10 +14,10 @@ const pickPanelStatus = document.getElementById("pick-panel-status");
 const pickSongList = document.getElementById("pick-song-list");
 
 let socket;
-let allowScroll = true;
 let currentSong = null;
 let currentSection = null;
-let currentSectionPartIndex = 0;
+let scrollSpeed = 0.015;
+let lastScrollTimestamp = null;
 let setList = [];
 let eligiblePickSongs = [];
 let isUserMenuOpen = false;
@@ -26,8 +26,7 @@ let isSubmittingPick = false;
 
 const STORAGE_KEY = "songlist-show-chords";
 const PICK_PANEL_STORAGE_KEY = "songlist-user-pick-panel-open";
-const MAX_SECTION_LINES = 6;
-
+const MAX_SCROLL_SPEED = 0.08;
 function getShowChords() {
   return showChordsToggle.checked;
 }
@@ -109,65 +108,6 @@ function toLyricsOnly(content) {
     .trim();
 }
 
-function getLongestLyricLineLength(content) {
-  return String(content || "")
-    .split("\n")
-    .reduce((maxLength, line) => Math.max(maxLength, line.trimEnd().length), 0);
-}
-
-function getLyricLineCount(content) {
-  return Math.max(1, String(content || "").split("\n").length);
-}
-
-function splitSectionLines(lines, maxLines = MAX_SECTION_LINES) {
-  const safeLines = Array.isArray(lines) ? lines : [];
-  const limit = Math.max(1, maxLines);
-  const partCount = Math.max(1, Math.ceil(safeLines.length / limit));
-  const baseSize = Math.floor(safeLines.length / partCount);
-  const remainder = safeLines.length % partCount;
-  const parts = [];
-  let startIndex = 0;
-
-  for (let index = 0; index < partCount; index += 1) {
-    const size = baseSize + (index < remainder ? 1 : 0);
-    parts.push({
-      startIndex,
-      lines: safeLines.slice(startIndex, startIndex + size),
-    });
-    startIndex += size;
-  }
-
-  if (parts.length === 0) {
-    parts.push({
-      startIndex: 0,
-      lines: [],
-    });
-  }
-
-  return parts;
-}
-
-function formatSectionPartLabel(label, partNumber, totalParts) {
-  if (totalParts <= 1) {
-    return label;
-  }
-
-  return `${label} Part ${partNumber}`;
-}
-
-function getSectionParts(section = currentSection) {
-  return splitSectionLines(String(section?.content || "").split("\n"));
-}
-
-function getCurrentSectionPart(section = currentSection) {
-  const sectionParts = getSectionParts(section);
-  currentSectionPartIndex = Math.max(0, Math.min(currentSectionPartIndex, sectionParts.length - 1));
-  return {
-    sectionParts,
-    currentPart: sectionParts[currentSectionPartIndex] || sectionParts[0],
-  };
-}
-
 function updateChordlessLayout(content = songContent.textContent || "") {
   if (getShowChords()) {
     songContent.style.removeProperty("--user-lyrics-font-size");
@@ -178,21 +118,7 @@ function updateChordlessLayout(content = songContent.textContent || "") {
   // Reset the lyric block to the full stage width before measuring so repeated
   // updates do not compound a previously shrunken max-width.
   songContent.style.setProperty("--user-lyrics-max-width", "100%");
-  const longestLineLength = Math.max(getLongestLyricLineLength(content), 1);
-  const lineCount = getLyricLineCount(content);
-  const horizontalPadding = 48;
-  const verticalPadding = 48;
-  const estimatedLineHeight = 1.8;
-  const stageWidth = songContent.parentElement?.clientWidth || songContent.clientWidth || window.innerWidth;
-  const availableWidth = Math.max(stageWidth - horizontalPadding, 240);
-  const contentTop = songContent.getBoundingClientRect().top;
-  const availableHeight = Math.max(window.innerHeight - contentTop - verticalPadding, 120);
-  const estimatedCharacterWidth = 0.56;
-  const widthLimitedFontSize = availableWidth / (longestLineLength * estimatedCharacterWidth);
-  const heightLimitedFontSize = (availableHeight - verticalPadding) / (lineCount * estimatedLineHeight);
-  const fontSizePx = Math.max(16, Math.min(widthLimitedFontSize, heightLimitedFontSize, 60));
-
-  songContent.style.setProperty("--user-lyrics-font-size", `${fontSizePx}px`);
+  songContent.style.setProperty("--user-lyrics-font-size", "clamp(1.5rem, 3vw, 3rem)");
 }
 
 function parseChordSegments(line) {
@@ -318,16 +244,38 @@ function renderSong(song, section) {
     return;
   }
 
-  const { currentPart } = getCurrentSectionPart(section);
-  const partContent = (currentPart?.lines || []).join("\n");
+  const fragment = document.createDocumentFragment();
+  song.sectionOrder.forEach((sectionId) => {
+    const songSection = song.sections?.[sectionId];
+    if (!songSection) {
+      return;
+    }
 
-  if (getShowChords()) {
-    songContent.replaceChildren(renderChordContent(partContent));
-  } else {
-    const lyricsOnly = toLyricsOnly(partContent);
-    songContent.textContent = lyricsOnly;
-    updateChordlessLayout(lyricsOnly);
-  }
+    const sectionCard = document.createElement("section");
+    sectionCard.className = "user-section-card";
+    sectionCard.dataset.sectionId = sectionId;
+    if (section.id === sectionId) {
+      sectionCard.classList.add("user-section-card-active");
+    }
+
+    const heading = document.createElement("h2");
+    heading.className = "user-section-heading";
+    heading.textContent = formatSectionLabel({ id: sectionId, ...songSection });
+    sectionCard.append(heading);
+
+    const body = document.createElement("div");
+    body.className = "user-section-body";
+    if (getShowChords()) {
+      body.append(renderChordContent(songSection.content));
+    } else {
+      body.textContent = toLyricsOnly(songSection.content);
+    }
+    sectionCard.append(body);
+    fragment.append(sectionCard);
+  });
+
+  songContent.replaceChildren(fragment);
+  updateChordlessLayout();
 
   songContent.classList.toggle("with-chords", getShowChords());
   songContent.classList.toggle("with-inline-chords", getShowChords());
@@ -336,13 +284,30 @@ function renderSong(song, section) {
   }
 }
 
+function setScrollSpeed(nextSpeed) {
+  if (!Number.isFinite(nextSpeed)) {
+    return;
+  }
+
+  scrollSpeed = Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed));
+}
+
 function applyScroll(scrollRatio) {
-  allowScroll = false;
-  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  window.scrollTo({ top: maxScroll * scrollRatio, behavior: "smooth" });
-  window.setTimeout(() => {
-    allowScroll = true;
-  }, 250);
+  const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
+  songContent.scrollTop = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+}
+
+function animateSongScroll(timestamp) {
+  if (lastScrollTimestamp !== null && scrollSpeed > 0) {
+    const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
+    const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
+    if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
+      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + maxScroll * scrollSpeed * elapsedSeconds);
+    }
+  }
+
+  lastScrollTimestamp = timestamp;
+  window.requestAnimationFrame(animateSongScroll);
 }
 
 function setStatus(text) {
@@ -584,18 +549,20 @@ function connect() {
         setList = message.payload.setList;
         renderPickSongList();
       }
-      currentSectionPartIndex = Number.isInteger(message.payload.currentSectionPartIndex)
-        ? message.payload.currentSectionPartIndex
-        : 0;
       renderSong(
         message.payload.currentSong,
         resolveSection(message.payload.currentSong, message.payload.currentSection, message.payload.currentSectionIndex),
       );
+      setScrollSpeed(message.payload.scrollSpeed);
       applyScroll(message.payload.scrollRatio);
     }
 
-    if (message.type === "scroll" && allowScroll) {
+    if (message.type === "scroll") {
       applyScroll(message.payload.scrollRatio);
+    }
+
+    if (message.type === "scroll-speed") {
+      setScrollSpeed(message.payload.scrollSpeed);
     }
 
     if (message.type === "setlist") {
@@ -619,3 +586,4 @@ loadPickableSongs().catch((error) => {
 });
 
 connect();
+window.requestAnimationFrame(animateSongScroll);
