@@ -1946,13 +1946,25 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
+  if (event.code === "Space" || event.key === " ") {
     event.preventDefault();
     goToNextLeaderStep();
     return;
   }
 
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    goToNextSongSelection();
+    return;
+  }
+
   if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    goToPreviousSongSelection();
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
     event.preventDefault();
     goToPreviousLeaderStep();
     return;
@@ -1960,13 +1972,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key === "ArrowDown") {
     event.preventDefault();
-    goToNextSongSelection();
-    return;
-  }
-
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    goToPreviousSongSelection();
+    goToNextLeaderStep();
   }
 });
 
