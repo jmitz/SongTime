@@ -40,7 +40,7 @@ const resetChordsButton = document.getElementById("reset-chords-button");
 const songStage = document.querySelector(".song-stage");
 
 let socket;
-let scrollSpeed = 0.015;
+let scrollSpeed = 1;
 let lastScrollTimestamp = null;
 let lastScrollBroadcastTimestamp = 0;
 let selectedSongId = null;
@@ -70,8 +70,8 @@ const MAX_LEADER_SECTION_LINES = 6;
 const MIN_SWIPE_DISTANCE = 48;
 const MAX_SWIPE_OFF_AXIS = 42;
 const LEADER_PANEL_STORAGE_KEY = "songlist-leader-panel";
-const SCROLL_SPEED_STEP = 0.005;
-const MAX_SCROLL_SPEED = 0.08;
+const SCROLL_SPEED_STEP = 0.1;
+const MAX_SCROLL_SPEED = 60;
 let swipeState = null;
 const storedLeaderPanel = window.localStorage.getItem(LEADER_PANEL_STORAGE_KEY);
 let activeLeaderPanel =
@@ -1364,8 +1364,9 @@ function setScrollSpeed(nextSpeed) {
     return;
   }
 
-  scrollSpeed = Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed));
-  scrollSpeedDisplay.textContent = `Scroll: ${(scrollSpeed * 100).toFixed(1)}%/sec · Up/Down: slower/faster`;
+  scrollSpeed = Math.round(Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed)) * 10) / 10;
+  const unit = scrollSpeed === 1 ? "line" : "lines";
+  scrollSpeedDisplay.textContent = `Scroll: ${scrollSpeed.toFixed(1)} ${unit}/min · Up/Down: slower/faster`;
 }
 
 function applyScroll(scrollRatio) {
@@ -1380,12 +1381,29 @@ function sendScrollSpeed(nextSpeed) {
   }
 }
 
+function getScrollLineHeight() {
+  const line = songContent.querySelector(".leader-chord-row, .chord-row, .leader-live-section-body");
+  if (!line) {
+    return 0;
+  }
+
+  const measuredHeight = line.getBoundingClientRect().height;
+  if (measuredHeight > 0) {
+    return measuredHeight;
+  }
+
+  const styles = window.getComputedStyle(line);
+  const lineHeight = Number.parseFloat(styles.lineHeight);
+  return Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(styles.fontSize) * 1.8;
+}
+
 function animateSongScroll(timestamp) {
   if (lastScrollTimestamp !== null && !isEditModeEnabled() && scrollSpeed > 0) {
     const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
     const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
     if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
-      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + maxScroll * scrollSpeed * elapsedSeconds);
+      const pixelsPerSecond = (getScrollLineHeight() * scrollSpeed) / 60;
+      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + pixelsPerSecond * elapsedSeconds);
       if (socket?.readyState === WebSocket.OPEN && timestamp - lastScrollBroadcastTimestamp >= 200) {
         lastScrollBroadcastTimestamp = timestamp;
         socket.send(JSON.stringify({ type: "scroll", scrollRatio: songContent.scrollTop / maxScroll }));

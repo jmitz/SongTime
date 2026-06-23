@@ -16,7 +16,7 @@ const pickSongList = document.getElementById("pick-song-list");
 let socket;
 let currentSong = null;
 let currentSection = null;
-let scrollSpeed = 0.015;
+let scrollSpeed = 1;
 let lastScrollTimestamp = null;
 let setList = [];
 let eligiblePickSongs = [];
@@ -26,7 +26,7 @@ let isSubmittingPick = false;
 
 const STORAGE_KEY = "songlist-show-chords";
 const PICK_PANEL_STORAGE_KEY = "songlist-user-pick-panel-open";
-const MAX_SCROLL_SPEED = 0.08;
+const MAX_SCROLL_SPEED = 60;
 function getShowChords() {
   return showChordsToggle.checked;
 }
@@ -289,7 +289,7 @@ function setScrollSpeed(nextSpeed) {
     return;
   }
 
-  scrollSpeed = Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed));
+  scrollSpeed = Math.round(Math.max(0, Math.min(MAX_SCROLL_SPEED, nextSpeed)) * 10) / 10;
 }
 
 function applyScroll(scrollRatio) {
@@ -297,12 +297,24 @@ function applyScroll(scrollRatio) {
   songContent.scrollTop = maxScroll * Math.max(0, Math.min(1, scrollRatio));
 }
 
+function getScrollLineHeight() {
+  const line = songContent.querySelector(".chord-row, .user-section-body");
+  if (!line) {
+    return 0;
+  }
+
+  const styles = window.getComputedStyle(line);
+  const lineHeight = Number.parseFloat(styles.lineHeight);
+  return Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(styles.fontSize) * 1.8;
+}
+
 function animateSongScroll(timestamp) {
   if (lastScrollTimestamp !== null && scrollSpeed > 0) {
     const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
     const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
     if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
-      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + maxScroll * scrollSpeed * elapsedSeconds);
+      const pixelsPerSecond = (getScrollLineHeight() * scrollSpeed) / 60;
+      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + pixelsPerSecond * elapsedSeconds);
     }
   }
 

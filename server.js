@@ -25,7 +25,7 @@ const state = {
   currentSectionIndex: 0,
   currentSectionPartIndex: 0,
   scrollRatio: 0,
-  scrollSpeed: 0.015,
+  scrollSpeed: 1,
   leaderCount: 0,
   userCount: 0,
 };
@@ -454,7 +454,7 @@ wss.on("connection", (socket) => {
     }
 
     if (message.type === "set-scroll-speed" && typeof message.scrollSpeed === "number") {
-      state.scrollSpeed = Math.max(0, Math.min(0.08, message.scrollSpeed));
+      state.scrollSpeed = Math.max(0, Math.min(60, message.scrollSpeed));
       broadcast({ type: "scroll-speed", payload: { scrollSpeed: state.scrollSpeed } });
     }
   });
