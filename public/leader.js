@@ -40,9 +40,11 @@ const resetChordsButton = document.getElementById("reset-chords-button");
 const songStage = document.querySelector(".song-stage");
 
 let socket;
-let scrollSpeed = 1;
+const DEFAULT_SCROLL_SPEED = 3;
+let scrollSpeed = DEFAULT_SCROLL_SPEED;
 let lastScrollTimestamp = null;
 let lastScrollBroadcastTimestamp = 0;
+let scrollPosition = 0;
 let selectedSongId = null;
 let currentSong = null;
 let currentSection = null;
@@ -70,7 +72,7 @@ const MAX_LEADER_SECTION_LINES = 6;
 const MIN_SWIPE_DISTANCE = 48;
 const MAX_SWIPE_OFF_AXIS = 42;
 const LEADER_PANEL_STORAGE_KEY = "songlist-leader-panel";
-const SCROLL_SPEED_STEP = 0.1;
+const SCROLL_SPEED_STEP = 1;
 const MAX_SCROLL_SPEED = 60;
 let swipeState = null;
 const storedLeaderPanel = window.localStorage.getItem(LEADER_PANEL_STORAGE_KEY);
@@ -1371,11 +1373,15 @@ function setScrollSpeed(nextSpeed) {
 
 function applyScroll(scrollRatio) {
   const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
-  songContent.scrollTop = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+  scrollPosition = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+  songContent.scrollTop = scrollPosition;
 }
 
 function sendScrollSpeed(nextSpeed) {
-  setScrollSpeed(nextSpeed);
+  // A newly selected song intentionally starts paused. One Down press resumes
+  // at the normal slow rate.
+  const nextActiveSpeed = scrollSpeed === 0 && nextSpeed > 0 ? DEFAULT_SCROLL_SPEED : nextSpeed;
+  setScrollSpeed(nextActiveSpeed);
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "set-scroll-speed", scrollSpeed }));
   }
@@ -1402,8 +1408,12 @@ function animateSongScroll(timestamp) {
     const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
     const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
     if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
+      if (Math.abs(songContent.scrollTop - scrollPosition) > 1) {
+        scrollPosition = songContent.scrollTop;
+      }
       const pixelsPerSecond = (getScrollLineHeight() * scrollSpeed) / 60;
-      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + pixelsPerSecond * elapsedSeconds);
+      scrollPosition = Math.min(maxScroll, scrollPosition + pixelsPerSecond * elapsedSeconds);
+      songContent.scrollTop = scrollPosition;
       if (socket?.readyState === WebSocket.OPEN && timestamp - lastScrollBroadcastTimestamp >= 200) {
         lastScrollBroadcastTimestamp = timestamp;
         socket.send(JSON.stringify({ type: "scroll", scrollRatio: songContent.scrollTop / maxScroll }));

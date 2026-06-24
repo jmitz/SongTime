@@ -16,8 +16,10 @@ const pickSongList = document.getElementById("pick-song-list");
 let socket;
 let currentSong = null;
 let currentSection = null;
-let scrollSpeed = 1;
+const DEFAULT_SCROLL_SPEED = 3;
+let scrollSpeed = DEFAULT_SCROLL_SPEED;
 let lastScrollTimestamp = null;
+let scrollPosition = 0;
 let setList = [];
 let eligiblePickSongs = [];
 let isUserMenuOpen = false;
@@ -294,7 +296,8 @@ function setScrollSpeed(nextSpeed) {
 
 function applyScroll(scrollRatio) {
   const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
-  songContent.scrollTop = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+  scrollPosition = maxScroll * Math.max(0, Math.min(1, scrollRatio));
+  songContent.scrollTop = scrollPosition;
 }
 
 function getScrollLineHeight() {
@@ -313,8 +316,12 @@ function animateSongScroll(timestamp) {
     const elapsedSeconds = Math.min((timestamp - lastScrollTimestamp) / 1000, 0.25);
     const maxScroll = Math.max(0, songContent.scrollHeight - songContent.clientHeight);
     if (maxScroll > 0 && songContent.scrollTop < maxScroll) {
+      if (Math.abs(songContent.scrollTop - scrollPosition) > 1) {
+        scrollPosition = songContent.scrollTop;
+      }
       const pixelsPerSecond = (getScrollLineHeight() * scrollSpeed) / 60;
-      songContent.scrollTop = Math.min(maxScroll, songContent.scrollTop + pixelsPerSecond * elapsedSeconds);
+      scrollPosition = Math.min(maxScroll, scrollPosition + pixelsPerSecond * elapsedSeconds);
+      songContent.scrollTop = scrollPosition;
     }
   }
 

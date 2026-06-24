@@ -25,7 +25,7 @@ const state = {
   currentSectionIndex: 0,
   currentSectionPartIndex: 0,
   scrollRatio: 0,
-  scrollSpeed: 1,
+  scrollSpeed: 3,
   leaderCount: 0,
   userCount: 0,
 };
