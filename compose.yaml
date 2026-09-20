@@ -17,8 +17,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env or your environment}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
       PORT: 3000
-      PUBLIC_HOST: 192.168.0.142
-      PUBLIC_PORT: 3000
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
+      PUBLIC_PORT: ${PUBLIC_PORT:-3000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

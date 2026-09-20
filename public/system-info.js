@@ -15,6 +15,13 @@ async function loadSystemInfo() {
     return;
   }
 
+  // The browser already reached this address. Prefer it over server-side
+  // interface guesses, which may point at a container, VPN, or stale LAN IP.
+  if (isDirectlyUsableHost(window.location.hostname)) {
+    setSystemIpText(window.location.host);
+    return;
+  }
+
   try {
     const response = await fetch("/api/system-info");
     const data = await response.json();
@@ -23,7 +30,10 @@ async function loadSystemInfo() {
       throw new Error(data.error || "Unable to load system information.");
     }
 
-    const ipAddress = data.ipAddress ? `${data.ipAddress}:${data.port}` : "Unavailable";
+    const hostname = data.ipAddress && data.ipAddress.includes(":") && !data.ipAddress.startsWith("[")
+      ? `[${data.ipAddress}]`
+      : data.ipAddress;
+    const ipAddress = hostname ? `${hostname}:${data.port}` : "Set PUBLIC_HOST to the server's LAN address";
     setSystemIpText(ipAddress);
   } catch (_error) {
     if (isDirectlyUsableHost(window.location.hostname)) {

@@ -1,6 +1,6 @@
 const path = require("path");
 const http = require("http");
-const dns = require("dns").promises;
+const fs = require("fs");
 const os = require("os");
 const express = require("express");
 const { WebSocketServer } = require("ws");
@@ -104,16 +104,12 @@ function getSystemInterfaceIpAddress() {
   return firstExternalAddress;
 }
 
-async function getSystemIpAddress() {
-  try {
-    const { address } = await dns.lookup("host.docker.internal", { family: 4 });
-    if (address) {
-      return address;
-    }
-  } catch (_error) {
-    // Ignore hostname lookup failures and fall back to local interface inspection.
+function getSystemIpAddress() {
+  // Container interfaces and host.docker.internal describe Docker networking,
+  // not the host's LAN address that audience devices can reach.
+  if (fs.existsSync("/.dockerenv") || fs.existsSync("/run/.containerenv")) {
+    return null;
   }
-
   return getSystemInterfaceIpAddress();
 }
 

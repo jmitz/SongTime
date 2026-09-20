@@ -22,6 +22,12 @@ For `npm start` or `docker run`, export `ADMIN_PASSWORD` in your shell. Node doe
 Browser sign-in issues an HttpOnly, SameSite session cookie valid for 12 hours; restarting the server invalidates it. Reload the leader/editor page to sign in again if needed. API clients can use HTTP Basic authentication with username `admin`. Use HTTPS when accessing the app across an untrusted network because Basic authentication does not encrypt credentials. The standalone Python editor accepts only local connections; use the Node editor for network access.
 If HTTPS terminates at a reverse proxy, set `PUBLIC_ORIGIN` to the exact browser-facing origin, such as `https://songs.example.org`, so origin checks and secure cookies use the public address. Configure the proxy to forward WebSocket upgrades.
 
+## Displayed Server Address
+
+The address display uses the hostname and port in your browser when you open the app through a network address. When opening through `localhost`, the app uses `PUBLIC_HOST` and `PUBLIC_PORT`, or a local network interface for a non-container run. Docker cannot reliably discover the host's LAN address, so it does not display a container or gateway address as a fallback.
+
+For local browser access with Docker Compose, add the host computer's current LAN address to `.env`, for example `PUBLIC_HOST=192.168.1.50`. Set `PUBLIC_PORT` if the published port differs from `3000`. Recreate the container after changing these values with `docker compose up -d`.
+
 ## Run With Docker
 
 ```bash
