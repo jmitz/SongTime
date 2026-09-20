@@ -5,6 +5,8 @@ const os = require("os");
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const { initializeDatabase } = require("./db/sqlite");
+const { createAuth } = require("./lib/auth");
+const { parseMessage } = require("./lib/ws-message");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const PORT = Number(process.env.PORT || 3000);
@@ -13,6 +15,14 @@ const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || PORT);
 const { db, dbPath, repository } = initializeDatabase();
 
 const app = express();
+const auth = createAuth();
+app.use((req, res, next) => {
+  const adminPage = /^\/(leader|editor)\.html$/i.test(req.path);
+  const mutation = /^\/api\//i.test(req.path) && !["GET", "HEAD", "OPTIONS"].includes(req.method);
+  const audiencePick = req.method === "POST" && /^\/api\/user-song-picks\/?$/i.test(req.path);
+  if (adminPage || (mutation && !audiencePick)) return auth.requireAdmin(req, res, next);
+  next();
+});
 app.use(express.json());
 app.use(express.static(PUBLIC_DIR));
 
@@ -325,7 +335,11 @@ app.get("/health", (_req, res) => {
 });
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+  server,
+  maxPayload: 16 * 1024,
+  verifyClient: ({ req }) => !req.headers.origin || auth.sameOrigin(req),
+});
 let isShuttingDown = false;
 let isDatabaseClosed = false;
 
@@ -370,16 +384,20 @@ function broadcastSetlist() {
   });
 }
 
-wss.on("connection", (socket) => {
+wss.on("connection", (socket, req) => {
   socket.role = null;
+  socket.on("error", () => socket.terminate());
   socket.send(JSON.stringify({ type: "state", payload: serializeState() }));
 
   socket.on("message", (buffer) => {
-    let message;
-    try {
-      message = JSON.parse(buffer.toString());
-    } catch (_error) {
-      return;
+    const message = parseMessage(buffer);
+    if (!message) return;
+
+    if ((message.type === "register" && message.role === "leader") || socket.role === "leader") {
+      if (!auth.isAdmin(req) || (req.headers.cookie && !auth.sameOrigin(req))) {
+        socket.close(1008, "Administrator sign-in required");
+        return;
+      }
     }
 
     if (message.type === "register" && (message.role === "leader" || message.role === "user")) {
@@ -470,7 +488,7 @@ wss.on("connection", (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`SongList app listening on http://localhost:${PORT} using SQLite at ${dbPath}`);
+  console.log(`SongList app listening on http://localhost:${server.address().port} using SQLite at ${dbPath}`);
 });
 
 function shutdown(signal) {

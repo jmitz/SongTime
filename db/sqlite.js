@@ -2,9 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const Database = require("better-sqlite3");
 const { loadSeedData } = require("./seed-data");
+const { migrateDatabase } = require("./migrations");
 
 const DEFAULT_DB_PATH = path.join(__dirname, "..", "data", "songlist.db");
-const SCHEMA_PATH = path.join(__dirname, "schema.sql");
 const MANUAL_SONG_METADATA = [
   {
     title: "10,000 Reasons",
@@ -115,11 +115,10 @@ function hydrateLatestPerformanceLog(db) {
               performance_event_songs.play_count,
               performance_event_songs.first_played_at,
               performance_event_songs.last_played_at,
-              songs.title,
-              songs.authors,
-              songs.ccli_num
+              performance_event_songs.title,
+              performance_event_songs.authors,
+              performance_event_songs.ccli_num
        FROM performance_event_songs
-       INNER JOIN songs ON songs.id = performance_event_songs.song_id
        WHERE performance_event_songs.event_id = ?
        ORDER BY performance_event_songs.position ASC, performance_event_songs.id ASC`,
     )
@@ -340,13 +339,17 @@ function createRepository(db) {
     `INSERT INTO performance_event_songs (
        event_id,
        song_id,
+       title,
+       authors,
+       ccli_num,
        position,
        first_played_at,
        last_played_at,
        play_count,
        updated_at
      )
-     VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)`,
+     SELECT ?, id, title, authors, ccli_num, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP
+     FROM songs WHERE id = ?`,
   );
   const incrementPerformanceSongEntry = db.prepare(
     `UPDATE performance_event_songs
@@ -459,7 +462,7 @@ function createRepository(db) {
       const existingEntry = selectPerformanceSongEntry.get(event.id, numericSongId);
       if (!existingEntry) {
         const nextPosition = selectNextPerformanceSongPosition.get(event.id)?.next_position ?? 0;
-        insertPerformanceSongEntry.run(event.id, numericSongId, nextPosition);
+        insertPerformanceSongEntry.run(event.id, nextPosition, numericSongId);
       }
     }
 
@@ -494,7 +497,7 @@ function createRepository(db) {
       incrementPerformanceSongEntry.run(existingEntry.id);
     } else {
       const nextPosition = selectNextPerformanceSongPosition.get(event.id)?.next_position ?? 0;
-      insertPerformanceSongEntry.run(event.id, numericSongId, nextPosition);
+      insertPerformanceSongEntry.run(event.id, nextPosition, numericSongId);
     }
 
     return refreshPerformanceLog();
@@ -670,179 +673,36 @@ function createRepository(db) {
   };
 }
 
-function ensureSongsSchema(db) {
-  const songsTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'songs'")
-    .get();
-
-  if (songsTable) {
-    const columns = db.prepare("PRAGMA table_info(songs)").all();
-    const columnNames = columns.map((column) => column.name);
-    const idColumn = columns.find((column) => column.name === "id");
-    const hasExpectedColumns =
-      idColumn?.type === "INTEGER" &&
-      columnNames.includes("authors") &&
-      columnNames.includes("ccli_num") &&
-      columnNames.includes("lyrics_json") &&
-      columnNames.includes("section_order_json");
-    const canMigrateAuthors =
-      idColumn?.type === "INTEGER" &&
-      !columnNames.includes("authors") &&
-      columnNames.includes("ccli_num") &&
-      columnNames.includes("lyrics_json") &&
-      columnNames.includes("section_order_json");
-
-    if (canMigrateAuthors) {
-      db.exec("ALTER TABLE songs ADD COLUMN authors TEXT NOT NULL DEFAULT ''");
-    } else if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS songaudit");
-      db.exec("DROP TABLE IF EXISTS songs");
-    }
-  }
-
-  const sectionTypesTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'section_types'")
-    .get();
-
-  if (sectionTypesTable) {
-    const columns = db.prepare("PRAGMA table_info(section_types)").all();
-    const columnNames = columns.map((column) => column.name);
-    const hasExpectedColumns = columnNames.includes("code") && columnNames.includes("desc");
-
-    if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS section_types");
-    }
-  }
-
-  const songAuditTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'songaudit'")
-    .get();
-
-  if (songAuditTable) {
-    const columns = db.prepare("PRAGMA table_info(songaudit)").all();
-    const columnNames = columns.map((column) => column.name);
-    const missingInitial = !columnNames.includes("initial");
-    const missingChordPlay = !columnNames.includes("chordPlay");
-    const hasExpectedColumns =
-      columnNames.includes("song_id") &&
-      columnNames.includes("audit_type") &&
-      columnNames.includes("initial") &&
-      columnNames.includes("chordPlay") &&
-      columnNames.includes("audit_status") &&
-      columnNames.includes("audit_note") &&
-      columnNames.includes("created_at") &&
-      columnNames.includes("updated_at");
-
-    const canMigrateAuditFlags =
-      columnNames.includes("song_id") &&
-      columnNames.includes("audit_type") &&
-      columnNames.includes("audit_status") &&
-      columnNames.includes("audit_note") &&
-      columnNames.includes("created_at") &&
-      (missingInitial || missingChordPlay);
-
-    if (canMigrateAuditFlags) {
-      if (missingInitial) {
-        db.exec("ALTER TABLE songaudit ADD COLUMN initial INTEGER NOT NULL DEFAULT 0");
-      }
-      if (missingChordPlay) {
-        db.exec("ALTER TABLE songaudit ADD COLUMN chordPlay INTEGER NOT NULL DEFAULT 0");
-      }
-    } else if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS songaudit");
-    }
-  }
-
-  const setlistEntriesTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'setlist_entries'")
-    .get();
-
-  if (setlistEntriesTable) {
-    const columns = db.prepare("PRAGMA table_info(setlist_entries)").all();
-    const columnNames = columns.map((column) => column.name);
-    const hasExpectedColumns =
-      columnNames.includes("song_id") &&
-      columnNames.includes("position") &&
-      columnNames.includes("created_at") &&
-      columnNames.includes("updated_at");
-
-    if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS setlist_entries");
-    }
-  }
-
-  const performanceEventsTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'performance_events'")
-    .get();
-
-  if (performanceEventsTable) {
-    const columns = db.prepare("PRAGMA table_info(performance_events)").all();
-    const columnNames = columns.map((column) => column.name);
-    const hasExpectedColumns =
-      columnNames.includes("started_at") &&
-      columnNames.includes("ended_at") &&
-      columnNames.includes("created_at") &&
-      columnNames.includes("updated_at");
-
-    if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS performance_event_songs");
-      db.exec("DROP TABLE IF EXISTS performance_events");
-    }
-  }
-
-  const performanceEventSongsTable = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'performance_event_songs'")
-    .get();
-
-  if (performanceEventSongsTable) {
-    const columns = db.prepare("PRAGMA table_info(performance_event_songs)").all();
-    const columnNames = columns.map((column) => column.name);
-    const hasExpectedColumns =
-      columnNames.includes("event_id") &&
-      columnNames.includes("song_id") &&
-      columnNames.includes("first_played_at") &&
-      columnNames.includes("last_played_at") &&
-      columnNames.includes("play_count") &&
-      columnNames.includes("position") &&
-      columnNames.includes("created_at") &&
-      columnNames.includes("updated_at");
-
-    if (!hasExpectedColumns) {
-      db.exec("DROP TABLE IF EXISTS performance_event_songs");
-    }
-  }
-
-  db.exec("DROP TABLE IF EXISTS live_sessions");
-  db.exec("DROP TABLE IF EXISTS song_arrangement_sections");
-  db.exec("DROP TABLE IF EXISTS song_sections");
-  db.exec(fs.readFileSync(SCHEMA_PATH, "utf8"));
-}
-
 function initializeDatabase() {
   const dbPath = process.env.SQLITE_PATH || DEFAULT_DB_PATH;
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
-  ensureSongsSchema(db);
+  try {
+    migrateDatabase(db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 
   const seedData = loadSeedData();
   const songCount = db.prepare("SELECT COUNT(*) AS count FROM songs").get().count;
   const updateSongMetadata = db.prepare(
     `UPDATE songs
      SET authors = CASE
-           WHEN (@authors IS NOT NULL AND @authors <> '') THEN @authors
+           WHEN (authors IS NULL OR TRIM(authors) = '') AND (@authors IS NOT NULL AND @authors <> '') THEN @authors
            ELSE authors
          END,
          ccli_num = CASE
-           WHEN (@ccli_num IS NOT NULL AND @ccli_num <> '') THEN @ccli_num
+           WHEN (ccli_num IS NULL OR TRIM(ccli_num) = '') AND (@ccli_num IS NOT NULL AND @ccli_num <> '') THEN @ccli_num
            ELSE ccli_num
          END,
          updated_at = CURRENT_TIMESTAMP
      WHERE title = @title
        AND (
-         ((@authors IS NOT NULL AND @authors <> '') AND authors <> @authors)
-         OR ((ccli_num IS NULL OR ccli_num = '') AND (@ccli_num IS NOT NULL AND @ccli_num <> ''))
+         ((authors IS NULL OR TRIM(authors) = '') AND (@authors IS NOT NULL AND @authors <> ''))
+         OR ((ccli_num IS NULL OR TRIM(ccli_num) = '') AND (@ccli_num IS NOT NULL AND @ccli_num <> ''))
        )`,
   );
   const syncKnownSongMetadata = db.transaction(() => {

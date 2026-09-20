@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node --test",
     "db:seed-preview": "node db/seed-data.js"
   },
   "dependencies": {

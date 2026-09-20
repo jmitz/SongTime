@@ -56,7 +56,10 @@ ON performance_events (started_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS performance_event_songs (
   id INTEGER PRIMARY KEY,
   event_id INTEGER NOT NULL,
-  song_id INTEGER NOT NULL,
+  song_id INTEGER,
+  title TEXT NOT NULL,
+  authors TEXT NOT NULL DEFAULT '',
+  ccli_num TEXT,
   first_played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   play_count INTEGER NOT NULL DEFAULT 1,
@@ -64,7 +67,7 @@ CREATE TABLE IF NOT EXISTS performance_event_songs (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (event_id) REFERENCES performance_events(id) ON DELETE CASCADE,
-  FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE,
+  FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE SET NULL,
   UNIQUE (event_id, song_id)
 );
 
