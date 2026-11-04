@@ -6,3 +6,4 @@ npm-debug.log*
 data/*.db
 data/*.db-shm
 data/*.db-wal
+.codex
