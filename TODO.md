@@ -4,7 +4,7 @@
 
 [] Add something that shows there is a set list available and allows the leader to start the set list.
 
-[] When in the set list playing setting make the up and down keys move to the next or previous songs.
+[] When in the set list playing setting make the right and left keys move to the next or previous songs.
 
 [] Add a menu system to hold the options.
 
