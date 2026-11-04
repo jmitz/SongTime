@@ -4,4 +4,4 @@ set -eu
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-docker compose up --build -d
+exec "$repo_root/scripts/start.sh" "$@"

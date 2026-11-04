@@ -5,4 +5,4 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 echo "Rebuilding SongList container after commit..."
-docker compose up --build -d
+exec "$repo_root/scripts/redeploy.sh"

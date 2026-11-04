@@ -26,7 +26,11 @@ If HTTPS terminates at a reverse proxy, set `PUBLIC_ORIGIN` to the exact browser
 
 The address display uses the hostname and port in your browser when you open the app through a network address. When opening through `localhost`, the app uses `PUBLIC_HOST` and `PUBLIC_PORT`, or a local network interface for a non-container run. Docker cannot reliably discover the host's LAN address, so it does not display a container or gateway address as a fallback.
 
-For local browser access with Docker Compose, add the host computer's current LAN address to `.env`, for example `PUBLIC_HOST=192.168.1.50`. Set `PUBLIC_PORT` if the published port differs from `3000`. Recreate the container after changing these values with `docker compose up -d`.
+Start the container from the host with `./scripts/start.sh` to detect its LAN IPv4 address automatically. This passes `PUBLIC_HOST` directly to Docker Compose without writing it to `.env`. Keep `ADMIN_PASSWORD` in `.env` as described above.
+
+The script supports Linux (requires `ip`), macOS, and WSL/Windows Git Bash (requires `powershell.exe`). Under WSL it queries Windows instead of advertising WSL's virtual address. Run it again after your network address changes. With multiple adapters or a VPN, select the desired address using `./scripts/start.sh --host 192.168.1.50`; an exported `PUBLIC_HOST` also overrides detection. Automatic detection overrides any older `PUBLIC_HOST` in `.env`.
+
+Extra arguments are passed to `docker compose up`, for example `./scripts/start.sh --no-build`. If detection fails, the script stops and asks for an explicit address. You can still run Compose directly with `PUBLIC_HOST` configured in `.env`. Set `PUBLIC_PORT` if the published port differs from `3000`.
 
 ## Run With Docker
 
@@ -49,7 +53,7 @@ docker run --rm -p 3000:3000 \
 Or with Docker Compose:
 
 ```bash
-docker compose up --build
+./scripts/start.sh
 ```
 
 ## Run With Windows Docker Desktop
@@ -72,7 +76,7 @@ This project uses bind mounts from [compose.yaml](/home/jdmit/src/personal/SongL
 Start it with:
 
 ```bash
-docker compose up --build
+./scripts/start.sh
 ```
 
 If `data/` does not exist yet, create it first:
@@ -137,7 +141,7 @@ For an existing database with the old performance-history schema, start the upda
 git config core.hooksPath .githooks
 ```
 
-- After that, `.githooks/post-commit` will run `docker compose up --build -d` after each commit.
+- After that, `.githooks/post-commit` runs the redeploy script after each commit, detecting the host address before running `docker compose up --build -d`.
 - You can also run the same behavior manually with:
 
 ```bash
